@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
+
+	mw "github.com/brickster241/rest-go/internal/api/middlewares"
 )
 
 func main() {
@@ -40,6 +43,14 @@ func main() {
 	http.HandleFunc("/execs", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Welcome to Executives Page...")
 	})
+
+	rl := mw.NewRateLimiter(5, time.Minute)
+	hppOptions := mw.HPPOptions{
+		CheckQuery: true,
+		CheckBody: true,
+		CheckBodyOnlyForContentType: "application/x-www-form-urlencoded",
+		WhiteList: []string{"sortBy", "sortOrder", "name", "age", "class"},
+	}
 
 	// Define Port and Start server
 	port := 3000
