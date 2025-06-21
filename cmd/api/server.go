@@ -109,7 +109,8 @@ func main() {
 		MinVersion: tls.VersionTLS12,
 	}
 
-	secureMux := mw.Hpp(hppOptions)(rl.RateLimiterMW(mw.CompressionMW(mw.ResponseTimeMW(mw.SecurityHeadersMW(mw.CorsMW(mux))))))
+	// Proper Middleware order.
+	secureMux := applyMiddleWares(mux, mw.Hpp(hppOptions), mw.CompressionMW, mw.SecurityHeadersMW, mw.ResponseTimeMW, rl.RateLimiterMW, mw.CorsMW)
 
 	// Define Port and Start server
 	port := ":3000"
@@ -121,9 +122,19 @@ func main() {
 		TLSConfig: tlsConfig,
 	}
 
-	fmt.Println("Server running on Port :", port)
+	fmt.Printf("Server running on Port %v\n", port)
 	err := server.ListenAndServeTLS(cert, key)
 	if err != nil {
 		log.Fatalln("Couldn't start server... :", err)
 	}
+}
+
+// Middleware is a function that wraps an http handler with additional functionality.
+type Middleware func(http.Handler) http.Handler
+
+func applyMiddleWares(handler http.Handler, middlewares ...Middleware) http.Handler {
+	for _, middleware := range middlewares {
+		handler = middleware(handler)
+	}
+	return handler
 }

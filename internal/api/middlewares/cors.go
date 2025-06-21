@@ -4,7 +4,6 @@ import "net/http"
 
 var allowedOrigins = []string {
 	"https://localhost:3000",
-	"https://my-origin-url.com",
 }
 
 func CorsMW(next http.Handler) http.Handler {
