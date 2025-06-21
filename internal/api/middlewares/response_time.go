@@ -10,7 +10,7 @@ func ResponseTimeMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		start := time.Now()
-		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
+		rw := &responseTimeWriter{ResponseWriter: w, status: http.StatusOK}
 		
 		// Calculate the duration
 		duration := time.Since(start)
@@ -26,12 +26,12 @@ func ResponseTimeMW(next http.Handler) http.Handler {
 }
 
 // Response Writer
-type responseWriter struct {
+type responseTimeWriter struct {
 	http.ResponseWriter
 	status int
 }
 
-func (rw *responseWriter) WriteHeader(code int) {
+func (rw *responseTimeWriter) WriteHeader(code int) {
 	rw.status = code
 	rw.ResponseWriter.WriteHeader(code)
 }
