@@ -9,44 +9,15 @@ import (
 	"sync"
 
 	models "github.com/brickster241/rest-go/internal/models"
+	"github.com/brickster241/rest-go/internal/repository/sqlconnect"
 )
 
 var (
 	teachers = make(map[int]models.Teacher)
 	mu_tchr = &sync.Mutex{}
-	nextID = 1
 )
 
-// Initialize some dummy data
-func init() {
-	teachers[nextID] = models.Teacher{
-		ID: nextID,
-		FirstName: "John",
-		LastName: "Doe",
-		Class: "9A",
-		Subject: "Math",
-	}
-	nextID++
-	teachers[nextID] = models.Teacher{
-		ID: nextID,
-		FirstName: "Jack",
-		LastName: "Smith",
-		Class: "10C",
-		Subject: "English",
-	}
-	nextID++
-	teachers[nextID] = models.Teacher{
-		ID: nextID,
-		FirstName: "Jack",
-		LastName: "Doe",
-		Class: "9B",
-		Subject: "Chemistry",
-	}
-	nextID++
-}
-
 func getTeachersHandler(w http.ResponseWriter, r *http.Request) {
-
 	path := strings.TrimPrefix(r.URL.Path, "/teachers/")
 	idStr := strings.TrimSuffix(path, "/")
 
@@ -99,11 +70,32 @@ func getTeachersHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func addTeacherHandler(w http.ResponseWriter, r *http.Request) {
+	
+	// Mutex variables
 	mu_tchr.Lock()
 	defer mu_tchr.Unlock()
 
+	// Connect to DB
+	db, err := sqlconnect.ConnectDB()
+	if err != nil {
+		http.Error(w, "Error connecting DB.", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	// Prepare Query
+	stmt, err := db.Prepare("INSERT INTO teachers (first_name, last_name, email, class, subject) VALUES($1,$2,$3,$4,$5)")
+	if err != nil {
+		http.Error(w, "Error in preparing DB query.", http.StatusInternalServerError)
+		fmt.Println("Error in preparing DB Query :", err)
+		return
+	}
+
+	defer stmt.Close()
+	
+	
 	var newTeachers []models.Teacher
-	err := json.NewDecoder(r.Body).Decode(&newTeachers)
+	err = json.NewDecoder(r.Body).Decode(&newTeachers)
 	if err != nil {
 		http.Error(w, "Invalid Request Body", http.StatusBadRequest)
 		return
@@ -111,12 +103,14 @@ func addTeacherHandler(w http.ResponseWriter, r *http.Request) {
 
 	addedTeachers := make([]models.Teacher, len(newTeachers))
 	for i, newTeacher := range newTeachers {
-		newTeacher.ID = nextID
-		teachers[nextID] = newTeacher
+		_, err := stmt.Exec(newTeacher.FirstName, newTeacher.LastName, newTeacher.Email, newTeacher.Class, newTeacher.Subject)
+		if err != nil {
+			http.Error(w, "Error Inserting values in DB.", http.StatusInternalServerError)
+			return
+		}
 		addedTeachers[i] = newTeacher
-		nextID++
 	}
-
+	
 	// Set the Headers
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -130,6 +124,7 @@ func addTeacherHandler(w http.ResponseWriter, r *http.Request) {
 		Data:   addedTeachers,
 	}
 
+	fmt.Printf("Added %d Teachers.", len(addedTeachers))
 	json.NewEncoder(w).Encode(resp)
 }
 

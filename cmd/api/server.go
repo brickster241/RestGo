@@ -8,14 +8,26 @@ import (
 
 	mw "github.com/brickster241/rest-go/internal/api/middlewares"
 	"github.com/brickster241/rest-go/internal/api/router"
+	"github.com/brickster241/rest-go/internal/repository/sqlconnect"
 	"github.com/brickster241/rest-go/pkg/utils"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 
 func main() {
+	// Load the .env file
+	godotenv.Load()
 
-	cert := "cert.pem"
-	key := "key.pem"
+	_, err := sqlconnect.ConnectDB()
+
+	if err != nil {
+		fmt.Println("Error connecting to DB :", err)
+		return
+	}
+
+	cert := "server.crt"
+	key := "server.key"
 
 	
 	/* rl := mw.NewRateLimiter(5, time.Minute)
@@ -45,7 +57,7 @@ func main() {
 	}
 
 	fmt.Printf("Server running on Port %v\n", port)
-	err := server.ListenAndServeTLS(cert, key)
+	err = server.ListenAndServeTLS(cert, key)
 	if err != nil {
 		log.Fatalln("Couldn't start server... :", err)
 	}
