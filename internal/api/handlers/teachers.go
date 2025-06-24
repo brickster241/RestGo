@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,27 +13,53 @@ import (
 	"github.com/brickster241/rest-go/internal/repository/sqlconnect"
 )
 
-var (
-	teachers = make(map[int]models.Teacher)
-	mu_tchr = &sync.Mutex{}
-)
+var mu_tchr = &sync.Mutex{}
 
 func getTeachersHandler(w http.ResponseWriter, r *http.Request) {
+	
+	// Connect to DB
+	db, err := sqlconnect.ConnectDB()
+	if err != nil {
+		http.Error(w, "Error connecting DB.", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+	
 	path := strings.TrimPrefix(r.URL.Path, "/teachers/")
 	idStr := strings.TrimSuffix(path, "/")
 
-	// Path is None, handle query params
+	// Path is None
 	if path == "" {
-		// Filter based on First or Last Name
-		firstName := r.URL.Query().Get("first_name")
-		lastName := r.URL.Query().Get("last_name")
+		query := "SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE 1=1"
+		var args []interface{}
+		
+		// Filter based on different params
+		query, args = addQueryFilters(r, query, args)
 
-		teacherList := make([]models.Teacher, 0, len(teachers))
-		for _, teacher := range teachers {
-			if (firstName == "" || firstName == teacher.FirstName) && (lastName == "" || lastName == teacher.LastName) {
-				teacherList = append(teacherList, teacher)
-			}
+		// Will be of type param:asc or param:desc
+		query = applySortingFilters(r, query)
+
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			fmt.Println(err)
+			http.Error(w, "DB Query error.", http.StatusInternalServerError)
+			return
 		}
+
+		defer rows.Close()
+
+		// Fetch the teachers
+		teacherList := make([]models.Teacher, 0)
+		for rows.Next() {
+			var teacher models.Teacher
+			err = rows.Scan(&teacher.ID, &teacher.FirstName, &teacher.LastName, &teacher.Email, &teacher.Class, &teacher.Subject)
+			if err != nil {
+				http.Error(w, "Error fetching DB row value.", http.StatusInternalServerError)
+				return
+			}
+			teacherList = append(teacherList, teacher)
+		}
+
 		resp := struct {
 			Status string    `json:"status"`
 			Count  int       `json:"count"`
@@ -44,7 +71,7 @@ func getTeachersHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		err := json.NewEncoder(w).Encode(resp)
+		err = json.NewEncoder(w).Encode(resp)
 		if err != nil {
 			http.Error(w, "Error occured while fetching Teacher List.", http.StatusBadRequest)
 		}
@@ -57,16 +84,83 @@ func getTeachersHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 		return
 	}
-	tchr, exists := teachers[teacherId]
-	if !exists {
-		http.Error(w, "Teacher Not Found", http.StatusNotFound)
+	var tchr models.Teacher
+	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email, class, subject FROM teachers where id = %d", teacherId)).Scan(&tchr.ID, &tchr.FirstName, &tchr.LastName, &tchr.Email, &tchr.Class, &tchr.Subject)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Teacher not found.", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "DB Query error.", http.StatusInternalServerError)
 		return
 	}
+
+	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(tchr)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error Fetching teacher with Id %d", teacherId), http.StatusBadRequest)
 		return
 	}
+}
+
+func applySortingFilters(r *http.Request, query string) string {
+	sortParams := r.URL.Query()["sortby"]
+	addQuery := " ORDER BY"
+	if len(sortParams) > 0 {
+		for i, sortParam := range sortParams {
+			parts := strings.Split(sortParam, ":")
+			if len(parts) != 2 {
+				continue
+			}
+
+			field, order := parts[0], parts[1]
+			if !isValidOrder(order) || !isValidSortField(field) {
+				continue
+			}
+			// To ensure to incorporate multiple sorting values
+			if i > 0 {
+				addQuery += ","
+			}
+			addQuery += fmt.Sprintf(" %s %s", field, order)
+		}
+		if addQuery != " ORDER BY" {
+			query += addQuery
+		}
+	}
+	return query
+}
+
+func isValidSortField(field string) bool {
+	validFields := map[string]bool{
+		"first_name": true,
+		"last_name": true,
+		"email": false,
+		"class": true,
+		"subject": false,
+	}
+	return validFields[field]
+}
+
+func isValidOrder(order string) bool {
+	return order == "asc" || order == "desc"
+}
+
+func addQueryFilters(r *http.Request, query string, args []interface{}) (string, []interface{}) {
+	params := []string{
+		"first_name",
+		"last_name",
+		"email",
+		"class",
+		"subject",
+	}
+
+	for _, param := range params {
+		value := r.URL.Query().Get(param)
+		if value != "" {
+			query += fmt.Sprintf(" AND %s=$%d", param, len(args)+1)
+			args = append(args, value)
+		}
+	}
+	return query, args
 }
 
 func addTeacherHandler(w http.ResponseWriter, r *http.Request) {
