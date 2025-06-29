@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -325,9 +326,31 @@ func patchTeacherHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// apply updates
+	// apply updates using reflect
+	teacherVal := reflect.ValueOf(&existingTchr).Elem()
+	teacherValType := teacherVal.Type()
+	
+	for k, v := range updates {
+		for i := 0; i < teacherVal.NumField(); i++ {
+			field := teacherValType.Field(i)
+			json_field := field.Tag.Get("json")
 
+			// Check whether such key exists in fields and set its value to v
+			if json_field == k + ",omitempty"  && teacherVal.Field(i).CanSet() {
+				teacherVal.Field(i).Set(reflect.ValueOf(v).Convert(teacherVal.Field(i).Type()))
+			}
+		}
+	}
 
+	_, err = db.Exec("UPDATE teachers SET first_name=$1, last_name=$2, email=$3, class=$4, subject=$5 WHERE id=$6", existingTchr.FirstName, existingTchr.LastName, existingTchr.Email, existingTchr.Class, existingTchr.Subject, existingTchr.ID)
+	if err != nil {
+		http.Error(w, "Error Updating Teachers.", http.StatusInternalServerError)
+		return
+	}
+
+	// Send back content
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(existingTchr)
 }
 
 func TeachersHandler(w http.ResponseWriter, r *http.Request) {
@@ -339,7 +362,6 @@ func TeachersHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		putTeacherHandler(w, r)
 	case http.MethodPatch:
-		// PATCH METHOD
 		patchTeacherHandler(w, r)
 	case http.MethodDelete:
 		fmt.Fprintf(w, "Welcome to Teachers Page... : DELETE Method")
