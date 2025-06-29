@@ -2,7 +2,7 @@ package middlewares
 
 import (
 	"compress/gzip"
-	"fmt"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -23,7 +23,7 @@ func CompressionMW(next http.Handler) http.Handler {
 		w = &gzipResponseWriter{ResponseWriter: w, Writer: gz}
 
 		next.ServeHTTP(w, r)
-		fmt.Println("Sent Response from CompressionMW.")
+		log.Println("Sent Response from CompressionMW.")
 	})
 }
 

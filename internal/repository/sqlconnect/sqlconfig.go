@@ -3,6 +3,7 @@ package sqlconnect
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -13,6 +14,6 @@ func ConnectDB() (*sql.DB, error){
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Connected to PostgreSQL.")
+	log.Println("Connected to PostgreSQL.")
 	return db, nil
 }

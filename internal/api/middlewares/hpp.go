@@ -1,7 +1,7 @@
 package middlewares
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -41,7 +41,7 @@ func isCorrectContentType(r *http.Request, contentType string) bool {
 func filterBodyParams(r *http.Request, whitelist []string) {
 	err := r.ParseForm()
 	if err != nil {
-		fmt.Println("Error occured : ", err)
+		log.Println("Error occured : ", err)
 		return
 	}
 

@@ -1,7 +1,7 @@
 package middlewares
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -20,8 +20,8 @@ func ResponseTimeMW(next http.Handler) http.Handler {
 		
 		duration = time.Since(start)
 		// Log the request details
-		fmt.Printf("Method: %s, URL: %s, Status: %d, Duration: %v\n", r.Method, r.URL, rw.status, duration.String())
-		fmt.Println("Sent Response from ResponseTimeMW.")
+		log.Printf("Method: %s, URL: %s, Status: %d, Duration: %v\n", r.Method, r.URL, rw.status, duration.String())
+		log.Println("Sent Response from ResponseTimeMW.")
 	})
 }
 

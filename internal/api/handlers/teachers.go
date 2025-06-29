@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 var mu_tchr = &sync.Mutex{}
 
+// GET teachers/{id}
 func getTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	
 	// Connect to DB
@@ -41,7 +43,7 @@ func getTeachersHandler(w http.ResponseWriter, r *http.Request) {
 
 		rows, err := db.Query(query, args...)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			http.Error(w, "DB Query error.", http.StatusInternalServerError)
 			return
 		}
@@ -81,11 +83,12 @@ func getTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	// Handle Path Parameters
 	teacherId, err := strconv.Atoi(idStr)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
+		http.Error(w, "Invalid teacher ID.", http.StatusBadRequest)
 		return
 	}
 	var tchr models.Teacher
-	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email, class, subject FROM teachers where id = %d", teacherId)).Scan(&tchr.ID, &tchr.FirstName, &tchr.LastName, &tchr.Email, &tchr.Class, &tchr.Subject)
+	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE id = %d", teacherId)).Scan(&tchr.ID, &tchr.FirstName, &tchr.LastName, &tchr.Email, &tchr.Class, &tchr.Subject)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Teacher not found.", http.StatusNotFound)
 		return
@@ -163,6 +166,7 @@ func addQueryFilters(r *http.Request, query string, args []interface{}) (string,
 	return query, args
 }
 
+// POST /teachers/
 func addTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	
 	// Mutex variables
@@ -181,7 +185,7 @@ func addTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	stmt, err := db.Prepare("INSERT INTO teachers (first_name, last_name, email, class, subject) VALUES($1,$2,$3,$4,$5)")
 	if err != nil {
 		http.Error(w, "Error in preparing DB query.", http.StatusInternalServerError)
-		fmt.Println("Error in preparing DB Query :", err)
+		log.Println("Error in preparing DB Query :", err)
 		return
 	}
 
@@ -218,8 +222,112 @@ func addTeacherHandler(w http.ResponseWriter, r *http.Request) {
 		Data:   addedTeachers,
 	}
 
-	fmt.Printf("Added %d Teachers.", len(addedTeachers))
+	log.Printf("Added %d Teachers.", len(addedTeachers))
 	json.NewEncoder(w).Encode(resp)
+}
+
+// PUT /teachers/{id}
+func putTeacherHandler(w http.ResponseWriter, r *http.Request) {
+	
+	// Mutex variables
+	mu_tchr.Lock()
+	defer mu_tchr.Unlock()
+
+	// Connect to DB
+	db, err := sqlconnect.ConnectDB()
+	if err != nil {
+		http.Error(w, "Error connecting DB.", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	path := strings.TrimPrefix(r.URL.Path, "/teachers/")
+	idStr := strings.TrimSuffix(path, "/")
+
+	// Handle Path Parameters
+	teacherId, err := strconv.Atoi(idStr)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Invalid teacher ID.", http.StatusBadRequest)
+		return
+	}
+
+	var updatedTchr models.Teacher
+	err = json.NewDecoder(r.Body).Decode(&updatedTchr)
+	if err != nil {
+		http.Error(w, "Invalid Teacher Payload.", http.StatusBadRequest)
+		return
+	}
+
+	var existingTchr models.Teacher
+	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE id = %d", teacherId)).Scan(&existingTchr.ID, &existingTchr.FirstName, &existingTchr.LastName, &existingTchr.Email, &existingTchr.Class, &existingTchr.Subject)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Teacher not found.", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "DB Query error.", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.Exec("UPDATE teachers SET first_name=$1, last_name=$2, email=$3, class=$4, subject=$5 WHERE id=$6", updatedTchr.FirstName, updatedTchr.LastName, updatedTchr.Email, updatedTchr.Class, updatedTchr.Subject, existingTchr.ID)
+	if err != nil {
+		http.Error(w, "Error updating Teacher in DB.", http.StatusInternalServerError)
+		return
+	}
+
+	// Set the Headers
+	w.Header().Set("Content-Type", "application/json")
+	log.Printf("Updated Teacher with id : %d", teacherId)
+	json.NewEncoder(w).Encode(updatedTchr)
+}
+
+// PATCH /teachers/{id}
+func patchTeacherHandler(w http.ResponseWriter, r *http.Request) {
+	
+	// Mutex variables
+	mu_tchr.Lock()
+	defer mu_tchr.Unlock()
+
+	// Connect to DB
+	db, err := sqlconnect.ConnectDB()
+	if err != nil {
+		http.Error(w, "Error connecting DB.", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	path := strings.TrimPrefix(r.URL.Path, "/teachers/")
+	idStr := strings.TrimSuffix(path, "/")
+
+	// Handle Path Parameters
+	teacherId, err := strconv.Atoi(idStr)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Invalid teacher ID.", http.StatusBadRequest)
+		return
+	}
+
+	// Get specific patch keys
+	var updates map[string]interface{}
+	err = json.NewDecoder(r.Body).Decode(&updates)
+	if err != nil {
+		http.Error(w, "Invalid Payload Request.", http.StatusBadRequest)
+		return
+	}
+
+	var existingTchr models.Teacher
+	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE id = %d", teacherId)).Scan(&existingTchr.ID, &existingTchr.FirstName, &existingTchr.LastName, &existingTchr.Email, &existingTchr.Class, &existingTchr.Subject)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Teacher not found.", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "DB Query error.", http.StatusInternalServerError)
+		return
+	}
+
+	// apply updates
+
+
 }
 
 func TeachersHandler(w http.ResponseWriter, r *http.Request) {
@@ -229,12 +337,14 @@ func TeachersHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		addTeacherHandler(w, r)
 	case http.MethodPut:
-		fmt.Fprintf(w, "Welcome to Teachers Page... : PUT Method")
+		putTeacherHandler(w, r)
 	case http.MethodPatch:
-		fmt.Fprintf(w, "Welcome to Teachers Page... : PATCH Method")
+		// PATCH METHOD
+		patchTeacherHandler(w, r)
 	case http.MethodDelete:
 		fmt.Fprintf(w, "Welcome to Teachers Page... : DELETE Method")
 	default:
 		fmt.Fprintf(w, "Invalid Request : %v", r.Method)
 	}
 }
+

@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/tls"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -22,7 +21,7 @@ func main() {
 	_, err := sqlconnect.ConnectDB()
 
 	if err != nil {
-		fmt.Println("Error connecting to DB :", err)
+		log.Println("Error connecting to DB :", err)
 		return
 	}
 
@@ -56,7 +55,7 @@ func main() {
 		TLSConfig: tlsConfig,
 	}
 
-	fmt.Printf("Server running on Port %v\n", port)
+	log.Printf("Server running on Port %v\n", port)
 	err = server.ListenAndServeTLS(cert, key)
 	if err != nil {
 		log.Fatalln("Couldn't start server... :", err)
