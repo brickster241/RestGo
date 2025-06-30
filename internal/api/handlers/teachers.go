@@ -371,48 +371,92 @@ func PatchTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	// Get specific patch keys
-	var updates map[string]interface{}
+	var updates []map[string]interface{}
 	err = json.NewDecoder(r.Body).Decode(&updates)
 	if err != nil {
 		http.Error(w, "Invalid Payload Request.", http.StatusBadRequest)
 		return
 	}
 
-	var existingTchr models.Teacher
-	err = db.QueryRow("SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE 1 = 1").Scan(&existingTchr.ID, &existingTchr.FirstName, &existingTchr.LastName, &existingTchr.Email, &existingTchr.Class, &existingTchr.Subject)
-	if err == sql.ErrNoRows {
-		http.Error(w, "Teacher not found.", http.StatusNotFound)
-		return
-	} else if err != nil {
-		http.Error(w, "DB Query error.", http.StatusInternalServerError)
+	tx, err := db.Begin()
+	if err != nil {
+		http.Error(w, "Error starting DB transaction.", http.StatusInternalServerError)
 		return
 	}
 
-	// apply updates using reflect
-	teacherVal := reflect.ValueOf(&existingTchr).Elem()
-	teacherValType := teacherVal.Type()
-	
-	for k, v := range updates {
-		for i := 0; i < teacherVal.NumField(); i++ {
-			field := teacherValType.Field(i)
-			json_field := field.Tag.Get("json")
+	var existingTchrs []models.Teacher
+	for _, update := range updates {
+		tchrIdStr, ok := update["id"].(string)
+		if !ok {
+			tx.Rollback()
+			http.Error(w, "Invalid Teacher ID.", http.StatusBadRequest)
+			return
+		}
 
-			// Check whether such key exists in fields and set its value to v
-			if json_field == k + ",omitempty"  && teacherVal.Field(i).CanSet() {
-				teacherVal.Field(i).Set(reflect.ValueOf(v).Convert(teacherVal.Field(i).Type()))
+		tchrId, err := strconv.Atoi(tchrIdStr)
+		if err != nil {
+			tx.Rollback()
+			http.Error(w, "Cannot convert Teacher ID to int.", http.StatusBadRequest)
+			return
+		}
+
+		var existingTchr models.Teacher
+		err = tx.QueryRow("SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE id = $1", tchrId).Scan(&existingTchr.ID, &existingTchr.FirstName, &existingTchr.LastName, &existingTchr.Email, &existingTchr.Class, &existingTchr.Subject)
+		if err == sql.ErrNoRows {
+			tx.Rollback()
+			http.Error(w, "Teacher not found.", http.StatusNotFound)
+			return
+		} else if err != nil {
+			tx.Rollback()
+			http.Error(w, "DB Query error.", http.StatusInternalServerError)
+			return
+		}
+
+		// apply updates using reflect
+		teacherVal := reflect.ValueOf(&existingTchr).Elem()
+		teacherValType := teacherVal.Type()
+		
+		for k, v := range update {
+			if k == "id" {
+				continue	// Skip the id field.
+			}
+			for i := 0; i < teacherVal.NumField(); i++ {
+				field := teacherValType.Field(i)
+				json_field := field.Tag.Get("json")
+
+				// Check whether such key exists in fields and set its value to v
+				if json_field == k + ",omitempty"  && teacherVal.Field(i).CanSet() {
+					if reflect.ValueOf(v).Type().ConvertibleTo(teacherVal.Field(i).Type()) {
+						teacherVal.Field(i).Set(reflect.ValueOf(v).Convert(teacherVal.Field(i).Type()))
+					} else {
+						tx.Rollback()
+						http.Error(w, "Invalid Payload Request.", http.StatusBadRequest)
+						return
+					}
+					break
+				}
 			}
 		}
+
+		_, err = tx.Exec("UPDATE teachers SET first_name=$1, last_name=$2, email=$3, class=$4, subject=$5 WHERE id=$6", existingTchr.FirstName, existingTchr.LastName, existingTchr.Email, existingTchr.Class, existingTchr.Subject, existingTchr.ID)
+		if err != nil {
+			tx.Rollback()
+			http.Error(w, "Error Updating Teachers.", http.StatusInternalServerError)
+			return
+		}
+		existingTchrs = append(existingTchrs, existingTchr)
 	}
 
-	_, err = db.Exec("UPDATE teachers SET first_name=$1, last_name=$2, email=$3, class=$4, subject=$5 WHERE id=$6", existingTchr.FirstName, existingTchr.LastName, existingTchr.Email, existingTchr.Class, existingTchr.Subject, existingTchr.ID)
+	err = tx.Commit()
 	if err != nil {
-		http.Error(w, "Error Updating Teachers.", http.StatusInternalServerError)
+		http.Error(w, "Error committing transaction.", http.StatusInternalServerError)
 		return
 	}
 
-	// Send back content
+	// Response
+	w.WriteHeader(http.StatusNoContent)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(existingTchr)
+	json.NewEncoder(w).Encode(existingTchrs)
 }
 
 // DELETE /teachers/{id}
@@ -484,45 +528,62 @@ func DeleteTeachersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
-	idStr := r.PathValue("id")
 
-	// Handle Path Parameters
-	teacherId, err := strconv.Atoi(idStr)
+	// Get specific ids to delete
+	var ids []int
+	err = json.NewDecoder(r.Body).Decode(&ids)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, "Invalid teacher ID.", http.StatusBadRequest)
+		http.Error(w, "Invalid Payload Request.", http.StatusBadRequest)
 		return
 	}
 
-	// Perform the delete operation
-	res, err := db.Exec("DELETE FROM teachers WHERE id=$1", teacherId)
+	tx, err := db.Begin()
 	if err != nil {
-		http.Error(w, "Error deleting Teacher.", http.StatusInternalServerError)
+		http.Error(w, "Error starting DB transaction.", http.StatusInternalServerError)
 		return
 	}
 
-	rowsAffected, err := res.RowsAffected()
+	// Iterate over all the IDs.
+	for _, teacherId := range ids {
+
+		// Perform the delete operation
+		res, err := tx.Exec("DELETE FROM teachers WHERE id=$1", teacherId)
+		if err != nil {
+			tx.Rollback()
+			http.Error(w, "Error deleting Teacher.", http.StatusInternalServerError)
+			return
+		}
+
+		rowsAffected, err := res.RowsAffected()
+		if err != nil {
+			tx.Rollback()
+			http.Error(w, "Error retrieving DB Delete result.", http.StatusInternalServerError)
+			return
+		}
+
+		// Operation was successful, but no rows affected i.e. invalid ID.
+		if rowsAffected == 0 {
+			tx.Rollback()
+			http.Error(w, fmt.Sprintf("Teacher %d not Found.", teacherId), http.StatusNotFound)
+			return
+		}
+	}
+	err = tx.Commit()
 	if err != nil {
-		http.Error(w, "Error retrieving DB Delete result.", http.StatusInternalServerError)
+		http.Error(w, "Error committing transaction.", http.StatusInternalServerError)
 		return
 	}
-
-	// Operation was successful, but no rows affected i.e. invalid ID.
-	if rowsAffected == 0 {
-		http.Error(w, "Teacher not Found.", http.StatusNotFound)
-		return
-	}
-
+	
+	// Response
 	w.WriteHeader(http.StatusNoContent)
 	w.Header().Set("Content-Type", "application/json")
 	resp := struct{
 		Status string `json:"status"`
-		ID int `json:"id"`
+		DeletedIDs []int `json:"deleted_ids"`
 	}{
-		Status: "Teacher successfully deleted.",
-		ID: teacherId,
+		Status: "Teachers successfully deleted.",
+		DeletedIDs: ids,
 	}
-
 	json.NewEncoder(w).Encode(resp)
 
 }
