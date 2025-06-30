@@ -17,8 +17,8 @@ import (
 
 var mu_tchr = &sync.Mutex{}
 
-// GET teachers/{id}
-func getTeachersHandler(w http.ResponseWriter, r *http.Request) {
+// GET teachers/
+func GetTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	
 	// Connect to DB
 	db, err := sqlconnect.ConnectDB()
@@ -28,59 +28,64 @@ func getTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 	
-	path := strings.TrimPrefix(r.URL.Path, "/teachers/")
-	idStr := strings.TrimSuffix(path, "/")
+	query := "SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE 1=1"
+	var args []interface{}
+	
+	// Filter based on different params
+	query, args = addQueryFilters(r, query, args)
 
-	// Path is None
-	if path == "" {
-		query := "SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE 1=1"
-		var args []interface{}
-		
-		// Filter based on different params
-		query, args = addQueryFilters(r, query, args)
+	// Will be of type param:asc or param:desc
+	query = applySortingFilters(r, query)
 
-		// Will be of type param:asc or param:desc
-		query = applySortingFilters(r, query)
-
-		rows, err := db.Query(query, args...)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "DB Query error.", http.StatusInternalServerError)
-			return
-		}
-
-		defer rows.Close()
-
-		// Fetch the teachers
-		teacherList := make([]models.Teacher, 0)
-		for rows.Next() {
-			var teacher models.Teacher
-			err = rows.Scan(&teacher.ID, &teacher.FirstName, &teacher.LastName, &teacher.Email, &teacher.Class, &teacher.Subject)
-			if err != nil {
-				http.Error(w, "Error fetching DB row value.", http.StatusInternalServerError)
-				return
-			}
-			teacherList = append(teacherList, teacher)
-		}
-
-		resp := struct {
-			Status string    `json:"status"`
-			Count  int       `json:"count"`
-			Data   []models.Teacher `json:"data"`
-		}{
-			Status: "success",
-			Count:  len(teacherList),
-			Data:   teacherList,
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		err = json.NewEncoder(w).Encode(resp)
-		if err != nil {
-			http.Error(w, "Error occured while fetching Teacher List.", http.StatusBadRequest)
-		}
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "DB Query error.", http.StatusInternalServerError)
 		return
 	}
 
+	defer rows.Close()
+
+	// Fetch the teachers
+	teacherList := make([]models.Teacher, 0)
+	for rows.Next() {
+		var teacher models.Teacher
+		err = rows.Scan(&teacher.ID, &teacher.FirstName, &teacher.LastName, &teacher.Email, &teacher.Class, &teacher.Subject)
+		if err != nil {
+			http.Error(w, "Error fetching DB row value.", http.StatusInternalServerError)
+			return
+		}
+		teacherList = append(teacherList, teacher)
+	}
+
+	resp := struct {
+		Status string    `json:"status"`
+		Count  int       `json:"count"`
+		Data   []models.Teacher `json:"data"`
+	}{
+		Status: "success",
+		Count:  len(teacherList),
+		Data:   teacherList,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		http.Error(w, "Error occured while fetching Teacher List.", http.StatusBadRequest)
+	}
+}
+
+// GET /teachers/{id}
+func GetOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
+	// Connect to DB
+	db, err := sqlconnect.ConnectDB()
+	if err != nil {
+		http.Error(w, "Error connecting DB.", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+	
+	idStr := r.PathValue("id")
 	// Handle Path Parameters
 	teacherId, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -168,7 +173,7 @@ func addQueryFilters(r *http.Request, query string, args []interface{}) (string,
 }
 
 // POST /teachers/
-func addTeacherHandler(w http.ResponseWriter, r *http.Request) {
+func PostTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	
 	// Mutex variables
 	mu_tchr.Lock()
@@ -228,7 +233,7 @@ func addTeacherHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /teachers/{id}
-func putTeacherHandler(w http.ResponseWriter, r *http.Request) {
+func PutOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	
 	// Mutex variables
 	mu_tchr.Lock()
@@ -241,9 +246,7 @@ func putTeacherHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
-
-	path := strings.TrimPrefix(r.URL.Path, "/teachers/")
-	idStr := strings.TrimSuffix(path, "/")
+	idStr := r.PathValue("id")
 
 	// Handle Path Parameters
 	teacherId, err := strconv.Atoi(idStr)
@@ -283,7 +286,7 @@ func putTeacherHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // PATCH /teachers/{id}
-func patchTeacherHandler(w http.ResponseWriter, r *http.Request) {
+func PatchOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	
 	// Mutex variables
 	mu_tchr.Lock()
@@ -297,8 +300,7 @@ func patchTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	path := strings.TrimPrefix(r.URL.Path, "/teachers/")
-	idStr := strings.TrimSuffix(path, "/")
+	idStr := r.PathValue("id")
 
 	// Handle Path Parameters
 	teacherId, err := strconv.Atoi(idStr)
@@ -353,7 +355,9 @@ func patchTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(existingTchr)
 }
 
-func deleteTeacherHandler(w http.ResponseWriter, r *http.Request) {
+// PATCH /teachers/{id}
+func PatchTeachersHandler(w http.ResponseWriter, r *http.Request) {
+	
 	// Mutex variables
 	mu_tchr.Lock()
 	defer mu_tchr.Unlock()
@@ -366,8 +370,65 @@ func deleteTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	path := strings.TrimPrefix(r.URL.Path, "/teachers/")
-	idStr := strings.TrimSuffix(path, "/")
+	// Get specific patch keys
+	var updates map[string]interface{}
+	err = json.NewDecoder(r.Body).Decode(&updates)
+	if err != nil {
+		http.Error(w, "Invalid Payload Request.", http.StatusBadRequest)
+		return
+	}
+
+	var existingTchr models.Teacher
+	err = db.QueryRow("SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE 1 = 1").Scan(&existingTchr.ID, &existingTchr.FirstName, &existingTchr.LastName, &existingTchr.Email, &existingTchr.Class, &existingTchr.Subject)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Teacher not found.", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "DB Query error.", http.StatusInternalServerError)
+		return
+	}
+
+	// apply updates using reflect
+	teacherVal := reflect.ValueOf(&existingTchr).Elem()
+	teacherValType := teacherVal.Type()
+	
+	for k, v := range updates {
+		for i := 0; i < teacherVal.NumField(); i++ {
+			field := teacherValType.Field(i)
+			json_field := field.Tag.Get("json")
+
+			// Check whether such key exists in fields and set its value to v
+			if json_field == k + ",omitempty"  && teacherVal.Field(i).CanSet() {
+				teacherVal.Field(i).Set(reflect.ValueOf(v).Convert(teacherVal.Field(i).Type()))
+			}
+		}
+	}
+
+	_, err = db.Exec("UPDATE teachers SET first_name=$1, last_name=$2, email=$3, class=$4, subject=$5 WHERE id=$6", existingTchr.FirstName, existingTchr.LastName, existingTchr.Email, existingTchr.Class, existingTchr.Subject, existingTchr.ID)
+	if err != nil {
+		http.Error(w, "Error Updating Teachers.", http.StatusInternalServerError)
+		return
+	}
+
+	// Send back content
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(existingTchr)
+}
+
+// DELETE /teachers/{id}
+func DeleteOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
+	// Mutex variables
+	mu_tchr.Lock()
+	defer mu_tchr.Unlock()
+
+	// Connect to DB
+	db, err := sqlconnect.ConnectDB()
+	if err != nil {
+		http.Error(w, "Error connecting DB.", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+	idStr := r.PathValue("id")
 
 	// Handle Path Parameters
 	teacherId, err := strconv.Atoi(idStr)
@@ -410,20 +471,59 @@ func deleteTeacherHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func TeachersHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		getTeachersHandler(w, r)
-	case http.MethodPost:
-		addTeacherHandler(w, r)
-	case http.MethodPut:
-		putTeacherHandler(w, r)
-	case http.MethodPatch:
-		patchTeacherHandler(w, r)
-	case http.MethodDelete:
-		deleteTeacherHandler(w, r)
-	default:
-		fmt.Fprintf(w, "Invalid Request : %v", r.Method)
+// DELETE /teachers/
+func DeleteTeachersHandler(w http.ResponseWriter, r *http.Request) {
+	// Mutex variables
+	mu_tchr.Lock()
+	defer mu_tchr.Unlock()
+
+	// Connect to DB
+	db, err := sqlconnect.ConnectDB()
+	if err != nil {
+		http.Error(w, "Error connecting DB.", http.StatusInternalServerError)
+		return
 	}
+	defer db.Close()
+	idStr := r.PathValue("id")
+
+	// Handle Path Parameters
+	teacherId, err := strconv.Atoi(idStr)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Invalid teacher ID.", http.StatusBadRequest)
+		return
+	}
+
+	// Perform the delete operation
+	res, err := db.Exec("DELETE FROM teachers WHERE id=$1", teacherId)
+	if err != nil {
+		http.Error(w, "Error deleting Teacher.", http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		http.Error(w, "Error retrieving DB Delete result.", http.StatusInternalServerError)
+		return
+	}
+
+	// Operation was successful, but no rows affected i.e. invalid ID.
+	if rowsAffected == 0 {
+		http.Error(w, "Teacher not Found.", http.StatusNotFound)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+	w.Header().Set("Content-Type", "application/json")
+	resp := struct{
+		Status string `json:"status"`
+		ID int `json:"id"`
+	}{
+		Status: "Teacher successfully deleted.",
+		ID: teacherId,
+	}
+
+	json.NewEncoder(w).Encode(resp)
+
 }
 
