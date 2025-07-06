@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +10,7 @@ import (
 
 	models "github.com/brickster241/rest-go/internal/models"
 	"github.com/brickster241/rest-go/internal/repository/sqlconnect"
+	"github.com/brickster241/rest-go/pkg/utils"
 )
 
 var mu_tchr = &sync.Mutex{}
@@ -30,8 +30,7 @@ func GetTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	// Connect to DB
 	teacherList, err := sqlconnect.GetTeachersDBHandler(query, args)
 	if err != nil {
-		log.Println("Error fetching Teachers : ", err)
-		http.Error(w, "Error fetching Teachers", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -46,10 +45,7 @@ func GetTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(resp)
-	if err != nil {
-		http.Error(w, "Error occured while fetching Teacher List.", http.StatusBadRequest)
-	}
+	json.NewEncoder(w).Encode(resp)
 }
 
 // GET /teachers/{id}
@@ -59,25 +55,19 @@ func GetOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	// Handle Path Parameters
 	teacherId, err := strconv.Atoi(idStr)
 	if err != nil {
-		log.Println("Invalid Teacher ID :", err)
-		http.Error(w, "Invalid teacher ID.", http.StatusBadRequest)
+		http.Error(w, utils.ErrorHandler(err, "Invalid Teacher ID.").Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Connect to DB
 	tchr, err := sqlconnect.GetOneTeacherDBHandler(teacherId)
 	if err != nil {
-		log.Println("Error fetching Teacher :", err)
-		http.Error(w, "Error Fetching Teacher.", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(tchr)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error Fetching teacher with Id %d", teacherId), http.StatusBadRequest)
-		return
-	}
+	json.NewEncoder(w).Encode(tchr)
 }
 
 func applySortingFilters(r *http.Request, query string) string {
@@ -151,15 +141,14 @@ func PostTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	var newTeachers []models.Teacher
 	err := json.NewDecoder(r.Body).Decode(&newTeachers)
 	if err != nil {
-		http.Error(w, "Invalid Request Body", http.StatusBadRequest)
+		http.Error(w, utils.ErrorHandler(err, "Invalid Request Body.").Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Connect to DB
 	addedTeachers, err := sqlconnect.PostTeachersDBHandler(newTeachers)
 	if err != nil {
-		log.Println("Error adding Teachers : ", err)
-		http.Error(w, "Error adding Teachers.", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	
@@ -175,8 +164,6 @@ func PostTeachersHandler(w http.ResponseWriter, r *http.Request) {
 		Count:  len(addedTeachers),
 		Data:   addedTeachers,
 	}
-
-	log.Printf("Added %d Teachers.", len(addedTeachers))
 	json.NewEncoder(w).Encode(resp)
 }
 
@@ -192,29 +179,26 @@ func PutOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	// Handle Path Parameters
 	teacherId, err := strconv.Atoi(idStr)
 	if err != nil {
-		log.Println("Invalid teacher ID :", err)
-		http.Error(w, "Invalid teacher ID.", http.StatusBadRequest)
+		http.Error(w, utils.ErrorHandler(err, "Invalid Teacher ID.").Error(), http.StatusBadRequest)
 		return
 	}
 
 	var updatedTchr models.Teacher
 	err = json.NewDecoder(r.Body).Decode(&updatedTchr)
 	if err != nil {
-		http.Error(w, "Invalid Teacher Payload.", http.StatusBadRequest)
+		http.Error(w, utils.ErrorHandler(err, "Invalid Teacher Payload.").Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Connect to DB
 	err = sqlconnect.PutOneTeacherDBHandler(teacherId, updatedTchr)
 	if err != nil {
-		log.Println("Error updating Teacher : ", err)
-		http.Error(w, "Error updating Teacher", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Set the Headers
 	w.Header().Set("Content-Type", "application/json")
-	log.Printf("Updated Teacher with id : %d", teacherId)
 	json.NewEncoder(w).Encode(updatedTchr)
 }
 
@@ -230,8 +214,7 @@ func PatchOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	// Handle Path Parameters
 	teacherId, err := strconv.Atoi(idStr)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, "Invalid teacher ID.", http.StatusBadRequest)
+		http.Error(w, utils.ErrorHandler(err, "Invalid Teacher ID.").Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -239,15 +222,14 @@ func PatchOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	var updates map[string]interface{}
 	err = json.NewDecoder(r.Body).Decode(&updates)
 	if err != nil {
-		http.Error(w, "Invalid Payload Request.", http.StatusBadRequest)
+		http.Error(w, utils.ErrorHandler(err, "Invalid Payload Request.").Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Connect to DB
 	existingTchr, err := sqlconnect.PatchOneTeacherDBHandler(teacherId, updates)
 	if err != nil {
-		log.Println("Error updating Teacher :", err)
-		http.Error(w, "Error updating Teacher", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -267,14 +249,13 @@ func PatchTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	var updates []map[string]interface{}
 	err := json.NewDecoder(r.Body).Decode(&updates)
 	if err != nil {
-		http.Error(w, "Invalid Payload Request.", http.StatusBadRequest)
+		http.Error(w, utils.ErrorHandler(err, "Invalid Payload Request.").Error(), http.StatusBadRequest)
 		return
 	}
 
 	existingTchrs, err := sqlconnect.PatchTeachersDBHandler(updates)
 	if err != nil {
-		log.Println("Error updating Teachers :", err)
-		http.Error(w, "Error updating Teachers.", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -295,16 +276,14 @@ func DeleteOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	// Handle Path Parameters
 	teacherId, err := strconv.Atoi(idStr)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, "Invalid teacher ID.", http.StatusBadRequest)
+		http.Error(w, utils.ErrorHandler(err, "Invalid teacher ID.").Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Connect to DB
 	err = sqlconnect.DeleteOneTeacherDBHandler(teacherId)
 	if err != nil {
-		log.Println("Error Deleting teacher :", err)
-		http.Error(w, "Error Deleting teacher.", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -317,9 +296,7 @@ func DeleteOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 		Status: "Teacher successfully deleted.",
 		ID: teacherId,
 	}
-
 	json.NewEncoder(w).Encode(resp)
-
 }
 
 // DELETE /teachers/
@@ -328,21 +305,18 @@ func DeleteTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	mu_tchr.Lock()
 	defer mu_tchr.Unlock()
 
-	
-
 	// Get specific ids to delete
 	var ids []int
 	err := json.NewDecoder(r.Body).Decode(&ids)
 	if err != nil {
-		http.Error(w, "Invalid Payload Request.", http.StatusBadRequest)
+		http.Error(w, utils.ErrorHandler(err, "Invalid Payload Request.").Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Connect to DB
 	err = sqlconnect.DeleteTeachersDBHandler(ids)
 	if err != nil {
-		log.Println("Error Deleting teachers :", err)
-		http.Error(w, "Error Deleting teachers.", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	
