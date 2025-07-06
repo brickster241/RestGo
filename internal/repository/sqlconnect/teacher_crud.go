@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/brickster241/rest-go/internal/models"
 	"github.com/brickster241/rest-go/pkg/utils"
@@ -62,7 +63,8 @@ func PostTeachersDBHandler(newTeachers []models.Teacher) ([]models.Teacher, erro
 	defer db.Close()
 
 	// Prepare Query
-	stmt, err := db.Prepare("INSERT INTO teachers (first_name, last_name, email, class, subject) VALUES($1,$2,$3,$4,$5)")
+	// stmt, err := db.Prepare("INSERT INTO teachers (first_name, last_name, email, class, subject) VALUES($1,$2,$3,$4,$5)")
+	stmt, err := db.Prepare(generateInsertQuery(models.Teacher{}))
 	if err != nil {
 		return nil, utils.ErrorHandler(err, "Error Adding teachers.")
 	}
@@ -71,7 +73,9 @@ func PostTeachersDBHandler(newTeachers []models.Teacher) ([]models.Teacher, erro
 
 	addedTeachers := make([]models.Teacher, len(newTeachers))
 	for i, newTeacher := range newTeachers {
-		_, err := stmt.Exec(newTeacher.FirstName, newTeacher.LastName, newTeacher.Email, newTeacher.Class, newTeacher.Subject)
+		values := getStructValues(newTeacher)
+		// _, err := stmt.Exec(newTeacher.FirstName, newTeacher.LastName, newTeacher.Email, newTeacher.Class, newTeacher.Subject)
+		_, err := stmt.Exec(values...)
 		if err != nil {
 			return nil, utils.ErrorHandler(err, "Error Adding teachers.")
 		}
@@ -281,4 +285,39 @@ func DeleteTeachersDBHandler(ids []int) error {
 		return utils.ErrorHandler(err, "Error deleting Teachers.")
 	}
 	return nil
+}
+
+func generateInsertQuery(model interface{}) string {
+	modelType := reflect.TypeOf(model)
+	var columns, placeholders string
+	placeHolderCount := 0
+	for i := 0; i < modelType.NumField(); i++ {
+		dbTag := modelType.Field(i).Tag.Get("db")
+		dbTag = strings.TrimSuffix(dbTag, ",omitempty")
+		if dbTag != "" && dbTag != "id" {
+			if columns != "" {
+				columns += ", "
+				placeholders += ","
+			}
+			columns += dbTag
+			placeHolderCount += 1
+			placeholders += fmt.Sprintf("$%d", placeHolderCount)
+		}
+	}
+
+	return fmt.Sprintf("INSERT INTO teachers (%s) VALUES (%s)", columns, placeholders)
+}
+
+// Get All Struct Values in a slice using reflect
+func getStructValues(model interface{}) []interface{} {
+	modelValue := reflect.ValueOf(model)
+	modelType := modelValue.Type()
+	values := []interface{}{}
+	for i := 0; i < modelType.NumField(); i++ {
+		dbTag := modelType.Field(i).Tag.Get("db")
+		if dbTag != "" && dbTag != "id,omitempty" {
+			values = append(values, modelValue.Field(i).Interface())
+		}
+	}
+	return values
 }
