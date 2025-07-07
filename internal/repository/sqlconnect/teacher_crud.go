@@ -63,9 +63,14 @@ func PostTeachersDBHandler(newTeachers []models.Teacher) ([]models.Teacher, erro
 	defer db.Close()
 
 	// Prepare Query
-	// stmt, err := db.Prepare("INSERT INTO teachers (first_name, last_name, email, class, subject) VALUES($1,$2,$3,$4,$5)")
-	stmt, err := db.Prepare(generateInsertQuery(models.Teacher{}))
+	tx, err := db.Begin()
 	if err != nil {
+		return nil, utils.ErrorHandler(err, "Error Adding Teachers.")
+	} 
+	// stmt, err := db.Prepare("INSERT INTO teachers (first_name, last_name, email, class, subject) VALUES($1,$2,$3,$4,$5)")
+	stmt, err := tx.Prepare(generateInsertQuery(models.Teacher{}))
+	if err != nil {
+		tx.Rollback()
 		return nil, utils.ErrorHandler(err, "Error Adding teachers.")
 	}
 
@@ -77,9 +82,15 @@ func PostTeachersDBHandler(newTeachers []models.Teacher) ([]models.Teacher, erro
 		// _, err := stmt.Exec(newTeacher.FirstName, newTeacher.LastName, newTeacher.Email, newTeacher.Class, newTeacher.Subject)
 		_, err := stmt.Exec(values...)
 		if err != nil {
+			tx.Rollback()
 			return nil, utils.ErrorHandler(err, "Error Adding teachers.")
 		}
 		addedTeachers[i] = newTeacher
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, utils.ErrorHandler(err, "Error Adding Teachers.")
 	}
 	return addedTeachers, nil
 }

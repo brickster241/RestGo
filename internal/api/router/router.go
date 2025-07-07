@@ -10,7 +10,7 @@ func Router() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// Handle default route
-	mux.HandleFunc("/", handlers.RootHandler)
+	mux.HandleFunc("GET /", handlers.RootHandler)
 
 	// Handle teachers route
 	mux.HandleFunc("GET /teachers", handlers.GetTeachersHandler)
@@ -23,7 +23,7 @@ func Router() *http.ServeMux {
 	mux.HandleFunc("DELETE /teachers/{id}", handlers.DeleteOneTeacherHandler)
 
 	// Handle students route
-	mux.HandleFunc("/students", handlers.StudentsHandler)
+	mux.HandleFunc("GET /students", handlers.StudentsHandler)
 
 	// Handle default route
 	mux.HandleFunc("/execs", handlers.ExecsHandler)
