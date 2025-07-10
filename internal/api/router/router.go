@@ -21,6 +21,8 @@ func Router() *http.ServeMux {
 	mux.HandleFunc("PUT /teachers/{id}", handlers.PutOneTeacherHandler)
 	mux.HandleFunc("PATCH /teachers/{id}", handlers.PatchOneTeacherHandler)
 	mux.HandleFunc("DELETE /teachers/{id}", handlers.DeleteOneTeacherHandler)
+	mux.HandleFunc("GET /teachers/{id}/students", handlers.GetStudentsByTeacherIDHandler)
+	mux.HandleFunc("GET /teachers/{id}/studentcount", handlers.GetStudentCountByTeacherIDHandler)
 
 	// Handle students route
 	mux.HandleFunc("GET /students", handlers.GetStudentsHandler)
@@ -33,7 +35,7 @@ func Router() *http.ServeMux {
 	mux.HandleFunc("DELETE /students/{id}", handlers.DeleteOneStudentHandler)
 
 	// Handle default route
-	mux.HandleFunc("/execs", handlers.ExecsHandler)
+	mux.HandleFunc("GET /execs", handlers.ExecsHandler)
 
 	return mux
 }

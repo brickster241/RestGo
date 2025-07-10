@@ -23,10 +23,10 @@ func GetTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	var args []interface{}
 	
 	// Filter based on different params
-	query, args = addQueryFilters(r, query, args)
+	query, args = addQueryFiltersTeacher(r, query, args)
 
 	// Will be of type param:asc or param:desc
-	query = applySortingFilters(r, query)
+	query = applySortingFiltersTeacher(r, query)
 
 	// Connect to DB
 	teacherList, err := sqlconnect.GetTeachersDBHandler(query, args)
@@ -71,7 +71,73 @@ func GetOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tchr)
 }
 
-func applySortingFilters(r *http.Request, query string) string {
+// GET /teachers/{id}/students
+func GetStudentsByTeacherIDHandler(w http.ResponseWriter, r *http.Request) {
+	
+	var students []models.Student
+	idStr := r.PathValue("id")
+	
+	// Handle Path Parameters
+	teacherId, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Invalid Teacher ID.").Error(), http.StatusBadRequest)
+		return
+	}
+
+	students, err = sqlconnect.GetStudentsByTeachersIDDBHandler(teacherId, students)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	resp := struct {
+		Status string `json:"status"`
+		TeacherID int `json:"teacherId"`
+		Count int `json:"count"`
+		Data []models.Student `json:"data"`
+	}{
+		Status: "success",
+		TeacherID: teacherId,
+		Count: len(students),
+		Data: students,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// GET /teachers/{id}/studentcount
+func GetStudentCountByTeacherIDHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	
+	// Handle Path Parameters
+	teacherId, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Invalid Teacher ID.").Error(), http.StatusBadRequest)
+		return
+	}
+
+	studentCount, err := sqlconnect.GetStudentCountByTeacherIDDBHandler(teacherId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := struct {
+		Status string `json:"status"`
+		TeacherId int `json:"teacherID"`
+		StudentCount int `json:"studentCount"`
+	}{
+		Status: "success",
+		TeacherId: teacherId,
+		StudentCount: studentCount,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func applySortingFiltersTeacher(r *http.Request, query string) string {
 	sortParams := r.URL.Query()["sortby"]
 	addQuery := " ORDER BY"
 	if len(sortParams) > 0 {
@@ -82,7 +148,7 @@ func applySortingFilters(r *http.Request, query string) string {
 			}
 
 			field, order := parts[0], parts[1]
-			if !isValidOrder(order) || !isValidSortField(field) {
+			if !isValidOrder(order) || !isValidSortFieldTeacher(field) {
 				continue
 			}
 			// To ensure to incorporate multiple sorting values
@@ -98,7 +164,7 @@ func applySortingFilters(r *http.Request, query string) string {
 	return query
 }
 
-func isValidSortField(field string) bool {
+func isValidSortFieldTeacher(field string) bool {
 	validFields := map[string]bool{
 		"first_name": true,
 		"last_name": true,
@@ -113,7 +179,7 @@ func isValidOrder(order string) bool {
 	return order == "asc" || order == "desc"
 }
 
-func addQueryFilters(r *http.Request, query string, args []interface{}) (string, []interface{}) {
+func addQueryFiltersTeacher(r *http.Request, query string, args []interface{}) (string, []interface{}) {
 	params := []string{
 		"first_name",
 		"last_name",

@@ -23,10 +23,10 @@ func GetStudentsHandler(w http.ResponseWriter, r *http.Request) {
 	var args []interface{}
 	
 	// Filter based on different params
-	query, args = addQueryFilters(r, query, args)
+	query, args = addQueryFiltersStudent(r, query, args)
 
 	// Will be of type param:asc or param:desc
-	query = applySortingFilters(r, query)
+	query = applySortingFiltersStudent(r, query)
 
 	// Connect to DB
 	studentList, err := sqlconnect.GetStudentsDBHandler(query, args)

@@ -37,6 +37,53 @@ func GetTeachersDBHandler(query string, args []interface{}) ([]models.Teacher, e
 	return teacherList, nil
 }
 
+func GetStudentsByTeachersIDDBHandler(teacherId int, students []models.Student) ([]models.Student, error) {
+	db, err := ConnectDB()
+	if err != nil {
+		return nil, utils.ErrorHandler(err, "Error connecting DB.")
+	}
+
+	defer db.Close()
+
+	query := "SELECT id, first_name, last_name, email, class FROM students WHERE class=(SELECT class FROM teachers WHERE id=$1)"
+	rows, err := db.Query(query, teacherId)
+	if err != nil {
+		return nil, utils.ErrorHandler(err, "Error fetching Student Count.")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var student models.Student
+		err := rows.Scan(&student.ID, &student.FirstName, &student.LastName, &student.Email, &student.Class)
+		if err != nil {
+			return nil, utils.ErrorHandler(err, "Error fetching Student Count.")
+		}
+		students = append(students, student)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, utils.ErrorHandler(err, "Error fetching Student Count.")
+	}
+	return students, nil
+}
+
+func GetStudentCountByTeacherIDDBHandler(teacherId int) (int, error) {
+	db, err := ConnectDB()
+	if err != nil {
+		return 0, utils.ErrorHandler(err, "Error connecting DB.")
+	}
+
+	defer db.Close()
+	var studentCount int
+
+	query := "SELECT COUNT(*) FROM students WHERE class=(SELECT class FROM teachers WHERE id=$1)"
+	err = db.QueryRow(query, teacherId).Scan(&studentCount)
+	if err != nil {
+		return 0, utils.ErrorHandler(err, "Error fetching Student Count.")
+	}
+	return studentCount, nil
+}
+
 func GetOneTeacherDBHandler(teacherId int) (models.Teacher, error) {
 	db, err := ConnectDB()
 	if err != nil {
