@@ -1,0 +1,257 @@
+package sqlconnect
+
+import (
+	"database/sql"
+	"fmt"
+	"reflect"
+	"strconv"
+
+	"github.com/brickster241/rest-go/internal/models"
+	"github.com/brickster241/rest-go/pkg/utils"
+)
+
+func GetExecsDBHandler(query string, args []interface{}) ([]models.Exec, error) {
+	db, err := ConnectDB()
+	if err != nil {
+		return []models.Exec{}, utils.ErrorHandler(err, "Error connecting DB.")
+	}
+	defer db.Close()
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return []models.Exec{}, utils.ErrorHandler(err, "Error fetching Execs.")
+	}
+
+	defer rows.Close()
+
+	// Fetch the execs
+	execList := make([]models.Exec, 0)
+	for rows.Next() {
+		var exec models.Exec
+		err = rows.Scan(&exec.ID, &exec.FirstName, &exec.LastName, &exec.Email)
+		if err != nil {
+			return []models.Exec{}, utils.ErrorHandler(err, "Error fetching Execs.")
+		}
+		execList = append(execList, exec)
+	}
+	return execList, nil
+}
+
+func GetOneExecDBHandler(execId int) (models.Exec, error) {
+	db, err := ConnectDB()
+	if err != nil {
+		return models.Exec{}, utils.ErrorHandler(err, "Error connecting DB.")
+	}
+	defer db.Close()
+
+	var exec models.Exec
+	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email FROM execs WHERE id = %d", execId)).Scan(&exec.ID, &exec.FirstName, &exec.LastName, &exec.Email)
+	if err == sql.ErrNoRows {
+		return models.Exec{}, utils.ErrorHandler(err, fmt.Sprintf("Error fetching Exec %d.", execId))
+	} else if err != nil {
+		return models.Exec{}, utils.ErrorHandler(err, fmt.Sprintf("Error fetching Exec %d.", execId))
+	}
+	return exec, nil
+}
+
+func PostExecsDBHandler(newExecs []models.Exec) ([]models.Exec, error) {
+	db, err := ConnectDB()
+	if err != nil {
+		return nil, utils.ErrorHandler(err, "Error connecting DB.")
+	}
+	defer db.Close()
+
+	// Prepare Query
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, utils.ErrorHandler(err, "Error Adding Execs.")
+	} 
+	// stmt, err := db.Prepare("INSERT INTO execs (first_name, last_name, email, class, subject) VALUES($1,$2,$3,$4,$5)")
+	stmt, err := tx.Prepare(generateInsertQuery("execs", models.Exec{}))
+	if err != nil {
+		tx.Rollback()
+		return nil, utils.ErrorHandler(err, "Error Adding execs.")
+	}
+
+	defer stmt.Close()
+
+	addedExecs := make([]models.Exec, len(newExecs))
+	for i, newExec := range newExecs {
+		values := getStructValues(newExec)
+		// _, err := stmt.Exec(newExec.FirstName, newExec.LastName, newExec.Email)
+		_, err := stmt.Exec(values...)
+		if err != nil {
+			tx.Rollback()
+			return nil, utils.ErrorHandler(err, "Error Adding execs.")
+		}
+		addedExecs[i] = newExec
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, utils.ErrorHandler(err, "Error Adding Execs.")
+	}
+	return addedExecs, nil
+}
+
+func PutOneExecDBHandler(execId int, updatedExec models.Exec) error {
+	db, err := ConnectDB()
+	if err != nil {
+		return utils.ErrorHandler(err, "Error connecting DB.")
+	}
+	defer db.Close()
+
+	var existingExec models.Exec
+	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email FROM execs WHERE id = %d", execId)).Scan(&existingExec.ID, &existingExec.FirstName, &existingExec.LastName, &existingExec.Email)
+	if err == sql.ErrNoRows {
+		return utils.ErrorHandler(err, fmt.Sprintf("Error updating Exec %d.", execId))
+	} else if err != nil {
+		return utils.ErrorHandler(err, fmt.Sprintf("Error updating Exec %d.", execId))
+	}
+
+	_, err = db.Exec("UPDATE execs SET first_name=$1, last_name=$2, email=$3 WHERE id=$4", updatedExec.FirstName, updatedExec.LastName, updatedExec.Email, existingExec.ID)
+	if err != nil {
+		return utils.ErrorHandler(err, fmt.Sprintf("Error updating Exec %d.", execId))
+	}
+	return nil
+}
+
+func PatchOneExecDBHandler(execId int, updates map[string]interface{}) (models.Exec, error) {
+	db, err := ConnectDB()
+	if err != nil {
+		return models.Exec{}, utils.ErrorHandler(err, "Error connecting DB.")
+	}
+	defer db.Close()
+
+	var existingExec models.Exec
+	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email FROM execs WHERE id = %d", execId)).Scan(&existingExec.ID, &existingExec.FirstName, &existingExec.LastName, &existingExec.Email)
+	if err == sql.ErrNoRows {
+		return models.Exec{}, utils.ErrorHandler(err, fmt.Sprintf("Error updating Exec %d.", execId))
+	} else if err != nil {
+		return models.Exec{}, utils.ErrorHandler(err, fmt.Sprintf("Error updating Exec %d.", execId))
+	}
+
+	// Apply updates using reflect
+	execVal := reflect.ValueOf(&existingExec).Elem()
+	execValType := execVal.Type()
+
+	for k, v := range updates {
+		for i := 0; i < execVal.NumField(); i++ {
+			field := execValType.Field(i)
+			json_field := field.Tag.Get("json")
+
+			// Check whether such key exists in fields and set its value to v
+			if json_field == k+",omitempty" && execVal.Field(i).CanSet() {
+				execVal.Field(i).Set(reflect.ValueOf(v).Convert(execVal.Field(i).Type()))
+			}
+		}
+	}
+
+	_, err = db.Exec("UPDATE execs SET first_name=$1, last_name=$2, email=$3 WHERE id=$4", existingExec.FirstName, existingExec.LastName, existingExec.Email, existingExec.ID)
+	if err != nil {
+		return models.Exec{}, utils.ErrorHandler(err, fmt.Sprintf("Error updating Exec %d.", execId))
+	}
+	return existingExec, nil
+}
+
+func PatchExecsDBHandler(updates []map[string]interface{}) ([]models.Exec, error) {
+	db, err := ConnectDB()
+	if err != nil {
+		return nil, utils.ErrorHandler(err, "Error connecting DB.")
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, utils.ErrorHandler(err, "Error updating Execs.")
+	}
+
+	var existingExecs []models.Exec
+	for _, update := range updates {
+		execIdStr, ok := update["id"].(string)
+		if !ok {
+			tx.Rollback()
+			return nil, utils.ErrorHandler(err, "Error updating Execs.")
+		}
+
+		execId, err := strconv.Atoi(execIdStr)
+		if err != nil {
+			tx.Rollback()
+			return nil, utils.ErrorHandler(err, "Error updating Execs.")
+		}
+
+		var existingExec models.Exec
+		err = tx.QueryRow("SELECT id, first_name, last_name, email FROM execs WHERE id = $1", execId).Scan(&existingExec.ID, &existingExec.FirstName, &existingExec.LastName, &existingExec.Email)
+		if err == sql.ErrNoRows {
+			tx.Rollback()
+			return nil, utils.ErrorHandler(err, "Error updating Execs.")
+		} else if err != nil {
+			tx.Rollback()
+			return nil, utils.ErrorHandler(err, "Error updating Execs.")
+		}
+
+		// apply updates using reflect
+		execVal := reflect.ValueOf(&existingExec).Elem()
+		execValType := execVal.Type()
+
+		for k, v := range update {
+			if k == "id" {
+				continue // Skip the id field.
+			}
+			for i := 0; i < execVal.NumField(); i++ {
+				field := execValType.Field(i)
+				json_field := field.Tag.Get("json")
+
+				// Check whether such key exists in fields and set its value to v
+				if json_field == k+",omitempty" && execVal.Field(i).CanSet() {
+					if reflect.ValueOf(v).Type().ConvertibleTo(execVal.Field(i).Type()) {
+						execVal.Field(i).Set(reflect.ValueOf(v).Convert(execVal.Field(i).Type()))
+					} else {
+						tx.Rollback()
+						return nil, utils.ErrorHandler(err, "Error updating Execs.")
+					}
+					break
+				}
+			}
+		}
+
+		_, err = tx.Exec("UPDATE execs SET first_name=$1, last_name=$2, email=$3 WHERE id=$4", existingExec.FirstName, existingExec.LastName, existingExec.Email, existingExec.ID)
+		if err != nil {
+			tx.Rollback()
+			return nil, utils.ErrorHandler(err, "Error updating Execs.")
+		}
+		existingExecs = append(existingExecs, existingExec)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, utils.ErrorHandler(err, "Error updating Execs.")
+	}
+	return existingExecs, nil
+}
+
+func DeleteOneExecDBHandler(execId int) error {
+	db, err := ConnectDB()
+	if err != nil {
+		// log.Println("Error connecting DB :", err)
+		return utils.ErrorHandler(err, "Error connecting DB.")
+	}
+	defer db.Close()
+
+	// Perform the delete operation
+	res, err := db.Exec("DELETE FROM execs WHERE id=$1", execId)
+	if err != nil {
+		return utils.ErrorHandler(err, fmt.Sprintf("Error deleting Exec %d.", execId))
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return utils.ErrorHandler(err, fmt.Sprintf("Error deleting Exec %d.", execId))
+	}
+
+	// Operation was successful, but no rows affected i.e. invalid ID.
+	if rowsAffected == 0 {
+		return utils.ErrorHandler(err, fmt.Sprintf("Error deleting Exec %d.", execId))
+	}
+	return nil
+}
