@@ -19,7 +19,7 @@ var mu_exec = &sync.Mutex{}
 // GET execs/
 func GetExecsHandler(w http.ResponseWriter, r *http.Request) {
 	
-	query := "SELECT id, first_name, last_name, email, class FROM execs WHERE 1=1"
+	query := "SELECT id, first_name, last_name, email, username, user_created_at, inactive_status, role FROM execs WHERE 1=1"
 	var args []interface{}
 	
 	// Filter based on different params
@@ -112,6 +112,9 @@ func addQueryFiltersExec(r *http.Request, query string, args []interface{}) (str
 		"first_name",
 		"last_name",
 		"email",
+		"username",
+		"inactive_status",
+		"role",
 	}
 
 	for _, param := range params {

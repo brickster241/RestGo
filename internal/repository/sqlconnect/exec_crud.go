@@ -1,13 +1,17 @@
 package sqlconnect
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
 
 	"github.com/brickster241/rest-go/internal/models"
 	"github.com/brickster241/rest-go/pkg/utils"
+	"golang.org/x/crypto/argon2"
 )
 
 func GetExecsDBHandler(query string, args []interface{}) ([]models.Exec, error) {
@@ -28,7 +32,7 @@ func GetExecsDBHandler(query string, args []interface{}) ([]models.Exec, error) 
 	execList := make([]models.Exec, 0)
 	for rows.Next() {
 		var exec models.Exec
-		err = rows.Scan(&exec.ID, &exec.FirstName, &exec.LastName, &exec.Email)
+		err = rows.Scan(&exec.ID, &exec.FirstName, &exec.LastName, &exec.Email, &exec.Username, &exec.UserCreatedAt, &exec.InactiveStatus, &exec.Role)
 		if err != nil {
 			return []models.Exec{}, utils.ErrorHandler(err, "Error fetching Execs.")
 		}
@@ -45,7 +49,7 @@ func GetOneExecDBHandler(execId int) (models.Exec, error) {
 	defer db.Close()
 
 	var exec models.Exec
-	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email FROM execs WHERE id = %d", execId)).Scan(&exec.ID, &exec.FirstName, &exec.LastName, &exec.Email)
+	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email, username, user_created_at, inactive_status, role FROM execs WHERE id = %d", execId)).Scan(&exec.ID, &exec.FirstName, &exec.LastName, &exec.Email, &exec.Username, &exec.UserCreatedAt, &exec.InactiveStatus, &exec.Role)
 	if err == sql.ErrNoRows {
 		return models.Exec{}, utils.ErrorHandler(err, fmt.Sprintf("Error fetching Exec %d.", execId))
 	} else if err != nil {
@@ -66,7 +70,6 @@ func PostExecsDBHandler(newExecs []models.Exec) ([]models.Exec, error) {
 	if err != nil {
 		return nil, utils.ErrorHandler(err, "Error Adding Execs.")
 	} 
-	// stmt, err := db.Prepare("INSERT INTO execs (first_name, last_name, email, class, subject) VALUES($1,$2,$3,$4,$5)")
 	stmt, err := tx.Prepare(generateInsertQuery("execs", models.Exec{}))
 	if err != nil {
 		tx.Rollback()
@@ -77,9 +80,25 @@ func PostExecsDBHandler(newExecs []models.Exec) ([]models.Exec, error) {
 
 	addedExecs := make([]models.Exec, len(newExecs))
 	for i, newExec := range newExecs {
+
+		if newExec.Password == "" {
+			return nil, utils.ErrorHandler(errors.New("password is blank"), "Password cannot be Empty")
+		}
+		salt := make([]byte, 16)
+		_, err := rand.Read(salt)
+		if err != nil {
+			return nil, utils.ErrorHandler(errors.New("failed to generate salt"), "Error adding Execs.")
+		}
+
+		// Hash the Password
+		hash := argon2.IDKey([]byte(newExec.Password), salt, 1, 64*1024, 4, 32)
+		saltBase64 := base64.StdEncoding.EncodeToString(salt)
+		hashBase64 := base64.StdEncoding.EncodeToString(hash)
+		encodedHash := fmt.Sprintf("%s.%s", saltBase64, hashBase64)
+		newExec.Password = encodedHash
+
 		values := getStructValues(newExec)
-		// _, err := stmt.Exec(newExec.FirstName, newExec.LastName, newExec.Email)
-		_, err := stmt.Exec(values...)
+		_, err = stmt.Exec(values...)
 		if err != nil {
 			tx.Rollback()
 			return nil, utils.ErrorHandler(err, "Error Adding execs.")
@@ -94,28 +113,6 @@ func PostExecsDBHandler(newExecs []models.Exec) ([]models.Exec, error) {
 	return addedExecs, nil
 }
 
-func PutOneExecDBHandler(execId int, updatedExec models.Exec) error {
-	db, err := ConnectDB()
-	if err != nil {
-		return utils.ErrorHandler(err, "Error connecting DB.")
-	}
-	defer db.Close()
-
-	var existingExec models.Exec
-	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email FROM execs WHERE id = %d", execId)).Scan(&existingExec.ID, &existingExec.FirstName, &existingExec.LastName, &existingExec.Email)
-	if err == sql.ErrNoRows {
-		return utils.ErrorHandler(err, fmt.Sprintf("Error updating Exec %d.", execId))
-	} else if err != nil {
-		return utils.ErrorHandler(err, fmt.Sprintf("Error updating Exec %d.", execId))
-	}
-
-	_, err = db.Exec("UPDATE execs SET first_name=$1, last_name=$2, email=$3 WHERE id=$4", updatedExec.FirstName, updatedExec.LastName, updatedExec.Email, existingExec.ID)
-	if err != nil {
-		return utils.ErrorHandler(err, fmt.Sprintf("Error updating Exec %d.", execId))
-	}
-	return nil
-}
-
 func PatchOneExecDBHandler(execId int, updates map[string]interface{}) (models.Exec, error) {
 	db, err := ConnectDB()
 	if err != nil {
@@ -124,7 +121,7 @@ func PatchOneExecDBHandler(execId int, updates map[string]interface{}) (models.E
 	defer db.Close()
 
 	var existingExec models.Exec
-	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email FROM execs WHERE id = %d", execId)).Scan(&existingExec.ID, &existingExec.FirstName, &existingExec.LastName, &existingExec.Email)
+	err = db.QueryRow(fmt.Sprintf("SELECT id, first_name, last_name, email, username FROM execs WHERE id = %d", execId)).Scan(&existingExec.ID, &existingExec.FirstName, &existingExec.LastName, &existingExec.Email, &existingExec.Username)
 	if err == sql.ErrNoRows {
 		return models.Exec{}, utils.ErrorHandler(err, fmt.Sprintf("Error updating Exec %d.", execId))
 	} else if err != nil {
@@ -147,7 +144,7 @@ func PatchOneExecDBHandler(execId int, updates map[string]interface{}) (models.E
 		}
 	}
 
-	_, err = db.Exec("UPDATE execs SET first_name=$1, last_name=$2, email=$3 WHERE id=$4", existingExec.FirstName, existingExec.LastName, existingExec.Email, existingExec.ID)
+	_, err = db.Exec("UPDATE execs SET first_name=$1, last_name=$2, email=$3, username=$4 WHERE id=$5", existingExec.FirstName, existingExec.LastName, existingExec.Email, existingExec.Username, existingExec.ID)
 	if err != nil {
 		return models.Exec{}, utils.ErrorHandler(err, fmt.Sprintf("Error updating Exec %d.", execId))
 	}
@@ -181,7 +178,7 @@ func PatchExecsDBHandler(updates []map[string]interface{}) ([]models.Exec, error
 		}
 
 		var existingExec models.Exec
-		err = tx.QueryRow("SELECT id, first_name, last_name, email FROM execs WHERE id = $1", execId).Scan(&existingExec.ID, &existingExec.FirstName, &existingExec.LastName, &existingExec.Email)
+		err = tx.QueryRow("SELECT id, first_name, last_name, email, username FROM execs WHERE id = $1", execId).Scan(&existingExec.ID, &existingExec.FirstName, &existingExec.LastName, &existingExec.Email, &existingExec.Username)
 		if err == sql.ErrNoRows {
 			tx.Rollback()
 			return nil, utils.ErrorHandler(err, "Error updating Execs.")
@@ -215,7 +212,7 @@ func PatchExecsDBHandler(updates []map[string]interface{}) ([]models.Exec, error
 			}
 		}
 
-		_, err = tx.Exec("UPDATE execs SET first_name=$1, last_name=$2, email=$3 WHERE id=$4", existingExec.FirstName, existingExec.LastName, existingExec.Email, existingExec.ID)
+		_, err = tx.Exec("UPDATE execs SET first_name=$1, last_name=$2, email=$3, username=$4 WHERE id=$5", existingExec.FirstName, existingExec.LastName, existingExec.Email, existingExec.Username, existingExec.ID)
 		if err != nil {
 			tx.Rollback()
 			return nil, utils.ErrorHandler(err, "Error updating Execs.")
