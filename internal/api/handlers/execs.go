@@ -1,7 +1,11 @@
 package handlers
 
 import (
+	"crypto/subtle"
+	"database/sql"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +16,7 @@ import (
 	models "github.com/brickster241/rest-go/internal/models"
 	"github.com/brickster241/rest-go/internal/repository/sqlconnect"
 	"github.com/brickster241/rest-go/pkg/utils"
+	"golang.org/x/crypto/argon2"
 )
 
 var mu_exec = &sync.Mutex{}
@@ -299,3 +304,81 @@ func DeleteOneExecHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// POST /execs/login
+func LoginExecHandler(w http.ResponseWriter, r *http.Request) {
+	var req models.Exec
+
+	// Data Validation
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Invalid Request Body.").Error(), http.StatusBadRequest)
+		return
+	}
+
+	defer r.Body.Close()
+	
+	if req.Username == "" || req.Password == "" {
+		http.Error(w, utils.ErrorHandler(errors.New("username/password cannot be empty"), "username/password cannot be empty").Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Search for user if user actually exists
+	db, err := sqlconnect.ConnectDB()
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Error Logging In. Try AGAIN.").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	defer db.Close()
+
+	exec := models.Exec{}
+	err = db.QueryRow("SELECT id, first_name, last_name, email, username, password, inactive_status, role from execs WHERE username=$1", req.Username).Scan(&exec.ID, &exec.FirstName, &exec.LastName, &exec.Email, &exec.Username, &exec.Password, &exec.InactiveStatus, &exec.Role)
+	if err == sql.ErrNoRows {
+		http.Error(w, utils.ErrorHandler(err, "User not Found.").Error(), http.StatusInternalServerError)
+		return
+	}
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Error Logging in. TRY AGAIN.").Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	// Is user active
+	if exec.InactiveStatus {
+		http.Error(w, utils.ErrorHandler(errors.New("account is inactive"), "Account is inactive.").Error(), http.StatusForbidden)
+	}
+
+	// Verify Password
+	parts := strings.Split(exec.Password, ".")
+	if len(parts) != 2 {
+		http.Error(w, utils.ErrorHandler(errors.New("invalid encoded hash format"), "Some error occured.").Error(), http.StatusForbidden)
+		return
+	}
+	hashedSaltBase64 := parts[0]
+	hashedPwdBase64 := parts[1]
+
+	salt, err := base64.StdEncoding.DecodeString(hashedSaltBase64)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Some error occured").Error(), http.StatusForbidden)
+		return
+	}
+	hashedPwd, err := base64.StdEncoding.DecodeString(hashedPwdBase64)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Some error occured").Error(), http.StatusForbidden)
+		return
+	}
+
+	hash := argon2.IDKey([]byte(req.Password), salt, 1, 64*1024, 4, 32)
+	if len(hash) != len(hashedPwd) {
+		http.Error(w, utils.ErrorHandler(err, "Incorrect Password, Try AGAIN.").Error(), http.StatusForbidden)
+		return
+	}
+	if subtle.ConstantTimeCompare(hash, hashedPwd) != 1 {
+		http.Error(w, utils.ErrorHandler(err, "Incorrect Password, Try AGAIN.").Error(), http.StatusForbidden)
+		return
+	}
+
+	// Generate Token
+
+	// Send Token as a response or as a cookie
+
+}
