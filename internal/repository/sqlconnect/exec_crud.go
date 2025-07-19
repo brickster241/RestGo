@@ -252,3 +252,26 @@ func DeleteOneExecDBHandler(execId int) error {
 	}
 	return nil
 }
+
+func LoginExecDBHandler(req models.Exec) (models.Exec, error) {
+	db, err := ConnectDB()
+	if err != nil {
+		return models.Exec{}, utils.ErrorHandler(err, "Internal Server Error.")
+	}
+
+	defer db.Close()
+
+	exec := models.Exec{}
+	err = db.QueryRow("SELECT id, first_name, last_name, email, username, password, inactive_status, role from execs WHERE username=$1", req.Username).Scan(&exec.ID, &exec.FirstName, &exec.LastName, &exec.Email, &exec.Username, &exec.Password, &exec.InactiveStatus, &exec.Role)
+	if err == sql.ErrNoRows {
+		return models.Exec{}, utils.ErrorHandler(err, "Incorrect Username / Password.")
+	}
+	if err != nil {
+		return models.Exec{}, utils.ErrorHandler(err, "Internal Server Error.")
+	}
+
+	if exec.InactiveStatus {
+		return models.Exec{}, utils.ErrorHandler(errors.New("account is inactive"), "Account is inactive.")
+	}
+	return exec, nil
+}
