@@ -348,6 +348,7 @@ func LoginExecHandler(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure: true,
 		Expires: time.Now().Add(20 * time.Second),
+		SameSite: http.SameSiteStrictMode,
 	})
 
 	// Response Body
@@ -356,6 +357,28 @@ func LoginExecHandler(w http.ResponseWriter, r *http.Request) {
 		Token string `json:"token"`
 	}{
 		Token: tokenString,
+	}
+	json.NewEncoder(w).Encode(resp)
+}
+
+func LogoutExecHandler(w http.ResponseWriter, r *http.Request) {
+	// Send Token as a response or as a cookie
+	http.SetCookie(w, &http.Cookie{
+		Name: "Bearer",
+		Value: "",
+		Path: "/",
+		HttpOnly: true,
+		Secure: true,
+		Expires: time.Unix(0, 0),
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	// Response Body
+	w.Header().Set("Content-Type", "application/json")
+	resp := struct{
+		Message string `json:"message"`
+	}{
+		Message: "Logged Out Successfully !",
 	}
 	json.NewEncoder(w).Encode(resp)
 }
