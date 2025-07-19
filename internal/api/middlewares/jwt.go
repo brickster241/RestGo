@@ -23,7 +23,7 @@ func JWT_MW(next http.Handler) http.Handler {
 		}
 
 		jwtSecret := os.Getenv("JWT_SECRET")
-		parsedToken, err := jwt.Parse(token.String(), func (token *jwt.Token) (interface {}, error) {
+		parsedToken, err := jwt.Parse(token.Value, func (token *jwt.Token) (interface {}, error) {
 			
 			// Don't forget to validate the algo is what you expect.
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
