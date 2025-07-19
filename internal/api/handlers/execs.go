@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	models "github.com/brickster241/rest-go/internal/models"
 	"github.com/brickster241/rest-go/internal/repository/sqlconnect"
@@ -378,7 +379,28 @@ func LoginExecHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate Token
+	tokenString, err := utils.SignToken(req.ID, req.Username, req.Role)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Could not create Login Token. Internal error.").Error(), http.StatusInternalServerError)
+		return
+	}
 
 	// Send Token as a response or as a cookie
+	http.SetCookie(w, &http.Cookie{
+		Name: "Bearer",
+		Value: tokenString,
+		Path: "/",
+		HttpOnly: true,
+		Secure: true,
+		Expires: time.Now().Add(20 * time.Second),
+	})
 
+	// Response Body
+	w.Header().Set("Content-Type", "application/json")
+	resp := struct{
+		Token string `json:"token"`
+	}{
+		Token: tokenString,
+	}
+	json.NewEncoder(w).Encode(resp)
 }
