@@ -1,9 +1,7 @@
 package sqlconnect
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"reflect"
@@ -11,7 +9,6 @@ import (
 
 	"github.com/brickster241/rest-go/internal/models"
 	"github.com/brickster241/rest-go/pkg/utils"
-	"golang.org/x/crypto/argon2"
 )
 
 func GetExecsDBHandler(query string, args []interface{}) ([]models.Exec, error) {
@@ -81,21 +78,11 @@ func PostExecsDBHandler(newExecs []models.Exec) ([]models.Exec, error) {
 	addedExecs := make([]models.Exec, len(newExecs))
 	for i, newExec := range newExecs {
 
-		if newExec.Password == "" {
-			return nil, utils.ErrorHandler(errors.New("password is blank"), "Password cannot be Empty")
-		}
-		salt := make([]byte, 16)
-		_, err := rand.Read(salt)
+		hashPassword, err := utils.HashPassword(newExec.Password)
 		if err != nil {
-			return nil, utils.ErrorHandler(errors.New("failed to generate salt"), "Error adding Execs.")
+			return nil, err
 		}
-
-		// Hash the Password
-		hash := argon2.IDKey([]byte(newExec.Password), salt, 1, 64*1024, 4, 32)
-		saltBase64 := base64.StdEncoding.EncodeToString(salt)
-		hashBase64 := base64.StdEncoding.EncodeToString(hash)
-		encodedHash := fmt.Sprintf("%s.%s", saltBase64, hashBase64)
-		newExec.Password = encodedHash
+		newExec.Password = hashPassword
 
 		values := getStructValues(newExec)
 		_, err = stmt.Exec(values...)

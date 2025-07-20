@@ -17,7 +17,7 @@ func execsRouter() *http.ServeMux {
 	mux.HandleFunc("PATCH /execs/{id}", handlers.PatchOneExecHandler)
 	mux.HandleFunc("DELETE /execs/{id}", handlers.DeleteOneExecHandler)
 
-	mux.HandleFunc("POST /execs/{id}/updatepassword", handlers.PostExecsHandler)
+	mux.HandleFunc("POST /execs/{id}/updatepassword", handlers.UpdateExecPasswordHandler)
 	mux.HandleFunc("POST /execs/login", handlers.LoginExecHandler)
 	mux.HandleFunc("POST /execs/logout", handlers.LogoutExecHandler)
 	mux.HandleFunc("POST /execs/forgotpassword", handlers.PostExecsHandler)

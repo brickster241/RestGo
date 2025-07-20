@@ -347,7 +347,7 @@ func LoginExecHandler(w http.ResponseWriter, r *http.Request) {
 		Path: "/",
 		HttpOnly: true,
 		Secure: true,
-		Expires: time.Now().Add(20 * time.Second),
+		Expires: time.Now().Add(20 * time.Minute),
 		SameSite: http.SameSiteStrictMode,
 	})
 
@@ -361,6 +361,7 @@ func LoginExecHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// POST /execs/logout
 func LogoutExecHandler(w http.ResponseWriter, r *http.Request) {
 	// Send Token as a response or as a cookie
 	http.SetCookie(w, &http.Cookie{
@@ -381,4 +382,85 @@ func LogoutExecHandler(w http.ResponseWriter, r *http.Request) {
 		Message: "Logged Out Successfully !",
 	}
 	json.NewEncoder(w).Encode(resp)
+}
+
+// POST /execs/{id}/updatepassword
+func UpdateExecPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	execId, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid Exec Id.", http.StatusBadRequest)
+		return
+	}
+	var req models.UpdatePasswordRequest
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Invalid Request Body.").Error(), http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		http.Error(w, "please enter password", http.StatusBadRequest)
+		return
+	}
+
+	// DB operations
+	db, err := sqlconnect.ConnectDB()
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Internal Server Error.").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	defer db.Close()
+	var execName string
+	var execPwd string
+	var execRole string
+	
+	err = db.QueryRow("SELECT username, password, role FROM execs WHERE id=$1", execId).Scan(&execName, &execPwd, &execRole)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "User Not Found.").Error(), http.StatusBadRequest)
+		return
+	}
+	err = utils.VerifyPassword(execPwd, req.CurrentPassword)
+	if err != nil {
+		http.Error(w, "Current Password is Incorrect.", http.StatusBadRequest)
+		return
+	}
+
+	hashedPassword, err := utils.HashPassword(req.NewPassword)
+	if err != nil {
+		http.Error(w, "Internal Server Error.", http.StatusBadRequest)
+		return
+	}
+	_, err = db.Exec("UPDATE execs SET password=$1, password_changed_at=$2 WHERE id=$3", hashedPassword, time.Now(), execId)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Failed to Update Password.").Error(), http.StatusInternalServerError)
+		return
+	}
+	token, err := utils.SignToken(execId, execName, execRole)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Updated Password. Failed to Create Token.").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Send Token as a response or as a cookie
+	http.SetCookie(w, &http.Cookie{
+		Name: "Bearer",
+		Value: token,
+		Path: "/",
+		HttpOnly: true,
+		Secure: true,
+		Expires: time.Now().Add(20 * time.Minute),
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	// Response Body
+	w.Header().Set("Content-Type", "application/json")
+	resp := models.UpdatePasswordResponse{
+		Token: token,
+		PasswordUpdated: true,
+	}
+	json.NewEncoder(w).Encode(resp)
+
 }
