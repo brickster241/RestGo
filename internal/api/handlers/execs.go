@@ -405,39 +405,12 @@ func UpdateExecPasswordHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// DB operations
-	db, err := sqlconnect.ConnectDB()
+	execName, execRole, err := sqlconnect.UpdateExecPasswordDBHandler(execId, req)
 	if err != nil {
-		http.Error(w, utils.ErrorHandler(err, "Internal Server Error.").Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	defer db.Close()
-	var execName string
-	var execPwd string
-	var execRole string
 	
-	err = db.QueryRow("SELECT username, password, role FROM execs WHERE id=$1", execId).Scan(&execName, &execPwd, &execRole)
-	if err != nil {
-		http.Error(w, utils.ErrorHandler(err, "User Not Found.").Error(), http.StatusBadRequest)
-		return
-	}
-	err = utils.VerifyPassword(execPwd, req.CurrentPassword)
-	if err != nil {
-		http.Error(w, "Current Password is Incorrect.", http.StatusBadRequest)
-		return
-	}
-
-	hashedPassword, err := utils.HashPassword(req.NewPassword)
-	if err != nil {
-		http.Error(w, "Internal Server Error.", http.StatusBadRequest)
-		return
-	}
-	_, err = db.Exec("UPDATE execs SET password=$1, password_changed_at=$2 WHERE id=$3", hashedPassword, time.Now(), execId)
-	if err != nil {
-		http.Error(w, utils.ErrorHandler(err, "Failed to Update Password.").Error(), http.StatusInternalServerError)
-		return
-	}
 	token, err := utils.SignToken(execId, execName, execRole)
 	if err != nil {
 		http.Error(w, utils.ErrorHandler(err, "Updated Password. Failed to Create Token.").Error(), http.StatusInternalServerError)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"time"
 
 	"github.com/brickster241/rest-go/internal/models"
 	"github.com/brickster241/rest-go/pkg/utils"
@@ -261,4 +262,35 @@ func LoginExecDBHandler(req models.Exec) (models.Exec, error) {
 		return models.Exec{}, utils.ErrorHandler(errors.New("account is inactive"), "Account is inactive.")
 	}
 	return exec, nil
+}
+
+func UpdateExecPasswordDBHandler(execId int, req models.UpdatePasswordRequest) (string, string, error) {
+	db, err := ConnectDB()
+	if err != nil {
+		return "", "", utils.ErrorHandler(err, "Internal Server Error.")
+	}
+
+	defer db.Close()
+	var execName string
+	var execPwd string
+	var execRole string
+
+	err = db.QueryRow("SELECT username, password, role FROM execs WHERE id=$1", execId).Scan(&execName, &execPwd, &execRole)
+	if err != nil {
+		return "", "", utils.ErrorHandler(err, "User Not Found.")
+	}
+	err = utils.VerifyPassword(execPwd, req.CurrentPassword)
+	if err != nil {
+		return "", "", err
+	}
+
+	hashedPassword, err := utils.HashPassword(req.NewPassword)
+	if err != nil {
+		return "", "", err
+	}
+	_, err = db.Exec("UPDATE execs SET password=$1, password_changed_at=$2 WHERE id=$3", hashedPassword, time.Now(), execId)
+	if err != nil {
+		return "", "", utils.ErrorHandler(err, "Failed to Update Password.")
+	}
+	return execName, execRole, nil
 }
