@@ -1,9 +1,13 @@
 package sqlconnect
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"strconv"
 	"time"
@@ -293,4 +297,39 @@ func UpdateExecPasswordDBHandler(execId int, req models.UpdatePasswordRequest) (
 		return "", "", utils.ErrorHandler(err, "Failed to Update Password.")
 	}
 	return execName, execRole, nil
+}
+
+func ForgotExecPasswordDBHandler(execEmail string) (time.Duration, string, error) {
+	db, err := ConnectDB()
+	if err != nil {
+		return 0, "", utils.ErrorHandler(err, "Internal Server Error.")
+	}
+	defer db.Close()
+
+	var exec models.Exec
+	err = db.QueryRow("SELECT id FROM execs WHERE email=$1", execEmail).Scan(&exec.ID)
+	if err != nil {
+		return 0, "", utils.ErrorHandler(err, "User Not Found.")
+	}
+
+	duration, err := strconv.Atoi(os.Getenv("RESET_TOKEN_EXP_DURATION"))
+	if err != nil {
+		return 0, "", utils.ErrorHandler(err, "Some error occured.")
+	}
+	mins := time.Duration(duration)
+	expiry := time.Now().Add(mins * time.Minute)
+	tokenBytes := make([]byte, 32)
+	_, err = rand.Read(tokenBytes)
+	if err != nil {
+		return 0, "", utils.ErrorHandler(err, "Failed to send Password reset email.")
+	}
+
+	token := hex.EncodeToString(tokenBytes)
+	hashedToken := sha256.Sum256(tokenBytes)
+	hashedTokenString := hex.EncodeToString(hashedToken[:])
+	_, err = db.Exec("UPDATE execs SET password_reset_token=$1, password_token_expires=$2 WHERE id=$3", hashedTokenString, expiry, exec.ID)
+	if err != nil {
+		return 0, "", utils.ErrorHandler(err, "Failed to send Password reset email.")
+	}
+	return mins, token, nil
 }

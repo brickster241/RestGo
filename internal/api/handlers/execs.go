@@ -14,6 +14,7 @@ import (
 	models "github.com/brickster241/rest-go/internal/models"
 	"github.com/brickster241/rest-go/internal/repository/sqlconnect"
 	"github.com/brickster241/rest-go/pkg/utils"
+	"github.com/go-mail/mail/v2"
 )
 
 var mu_exec = &sync.Mutex{}
@@ -436,4 +437,39 @@ func UpdateExecPasswordHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(resp)
 
+}
+
+// POST /execs/forgotpassword
+func ForgotExecPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email string `json:"email"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&req)
+	defer r.Body.Close()
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Invalid Request Body.").Error(), http.StatusBadRequest)
+		return
+	}
+	mins, token, err := sqlconnect.ForgotExecPasswordDBHandler(req.Email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Send the reset email
+	resetURL := fmt.Sprintf("https://localhost:3000/execs/resetpassword/reset/%s", token)
+	msg := fmt.Sprintf("Forgot your password? Reset your password using following link: \n%s\n If you didn't request a password reset, please ignore this email. This link is only valid for %d mins.\n", resetURL, int(mins))
+	m := mail.NewMessage()
+	m.SetHeader("From", "schooladmin@school.com")
+	m.SetHeader("To", req.Email)
+	m.SetHeader("Subject", "Your password Reset Link")
+	m.SetBody("text/plain", msg)
+	d := mail.NewDialer("localhost", 1025, "", "")
+	err = d.DialAndSend(m)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Failed to send password Reset Email.").Error(), http.StatusInternalServerError)
+		return
+	}
+	// Respond with Success Message.
+	fmt.Fprintf(w, "Password Reset Link sent to %s", req.Email)
 }
