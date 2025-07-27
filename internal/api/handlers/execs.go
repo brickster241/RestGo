@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -472,4 +474,55 @@ func ForgotExecPasswordHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Respond with Success Message.
 	fmt.Fprintf(w, "Password Reset Link sent to %s", req.Email)
+}
+
+// POST /execs/resetpassword/reset/{resetcode}
+func ResetPasswordHandler(w http.ResponseWriter, r* http.Request) {
+	
+	token := r.PathValue("resetcode")
+	type ResetPasswordRequest struct {
+		NewPassword string `json:"new_password"`
+		ConfirmPassword string `json:"confirm_password"`
+	}
+
+	var req ResetPasswordRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Invalid Request Body.").Error(), http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if req.NewPassword == "" || req.ConfirmPassword == "" {
+		http.Error(w, "Passwords should not be blank.", http.StatusBadRequest)
+		return
+	}
+
+	if req.NewPassword != req.ConfirmPassword {
+		http.Error(w, "Passwords should match.", http.StatusBadRequest)
+		return
+	}
+
+	bytes, err := hex.DecodeString(token)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Internal Server Error.").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	hashedToken := sha256.Sum256(bytes)
+	hashedTokenString := hex.EncodeToString(hashedToken[:])
+
+	// Hash the new Password
+	hashedPwd, err := utils.HashPassword(req.NewPassword)
+	if err != nil {
+		http.Error(w, utils.ErrorHandler(err, "Error Resetting Password.").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = sqlconnect.ResetPasswordDBHandler(hashedTokenString, hashedPwd)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprintln(w, "Password Reset Successfully.")
 }

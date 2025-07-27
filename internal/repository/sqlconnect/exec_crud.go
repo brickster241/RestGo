@@ -333,3 +333,24 @@ func ForgotExecPasswordDBHandler(execEmail string) (time.Duration, string, error
 	}
 	return mins, token, nil
 }
+
+func ResetPasswordDBHandler(hashedTokenString string, hashedPwd string) error {
+	db, err := ConnectDB()
+	if err != nil {
+		return utils.ErrorHandler(err, "Internal Server Error.")
+	}
+	defer db.Close()
+
+	var exec models.Exec
+
+	err = db.QueryRow("SELECT id, email FROM execs WHERE password_reset_token=$1 and password_token_expires > $2", hashedTokenString, time.Now()).Scan(&exec.ID, &exec.Email)
+	if err != nil {
+		return utils.ErrorHandler(err, "Invalid / Expired Reset Code.")
+	}
+
+	_, err = db.Exec("UPDATE execs SET password=$1, password_reset_token=NULL, password_token_expires=NULL, password_changed_at=$2 WHERE id=$3", hashedPwd, time.Now(), exec.ID)
+	if err != nil {
+		return utils.ErrorHandler(err, "Internal Server Error.")
+	}
+	return nil
+}

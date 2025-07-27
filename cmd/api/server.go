@@ -44,7 +44,7 @@ func main() {
 	// Proper Middleware order.
 	// secureMux := applyMiddleWares(mux, mw.Hpp(hppOptions), mw.CompressionMW, mw.SecurityHeadersMW, mw.ResponseTimeMW, rl.RateLimiterMW, mw.CorsMW)
 
-	jwt_MW := mw.ExcludePathsMW(mw.JWT_MW, "/execs/login", "/execs/forgotpassword")
+	jwt_MW := mw.ExcludePathsMW(mw.JWT_MW, "/execs/login", "/execs/forgotpassword", "/execs/resetpassword/reset")
 	secureMux := utils.ApplyMiddleWares(router.MainRouter(), jwt_MW, mw.SecurityHeadersMW)
 	// Define Port and Start server
 	port := ":3000"
