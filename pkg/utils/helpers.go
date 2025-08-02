@@ -2,7 +2,9 @@ package utils
 
 import (
 	"errors"
+	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -23,4 +25,16 @@ func GetFieldNames(model interface{}) []string {
 		fields = append(fields, strings.TrimSuffix(val.Field(i).Tag.Get("json"), ",omitempty")) // GET JSON Tag
 	}
 	return fields
+}
+
+func GetPaginationParams(r *http.Request) (int ,int){
+	page, err := strconv.Atoi(r.URL.Query().Get("page"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || limit < 10 {
+		limit = 10
+	}
+	return page, limit
 }

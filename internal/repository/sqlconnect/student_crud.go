@@ -10,16 +10,16 @@ import (
 	"github.com/brickster241/rest-go/pkg/utils"
 )
 
-func GetStudentsDBHandler(query string, args []interface{}) ([]models.Student, error) {
+func GetStudentsDBHandler(query string, args []interface{}) ([]models.Student, int, error) {
 	db, err := ConnectDB()
 	if err != nil {
-		return []models.Student{}, utils.ErrorHandler(err, "Error connecting DB.")
+		return []models.Student{}, 0, utils.ErrorHandler(err, "Error connecting DB.")
 	}
 	defer db.Close()
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		return []models.Student{}, utils.ErrorHandler(err, "Error fetching Students.")
+		return []models.Student{}, 0, utils.ErrorHandler(err, "Error fetching Students.")
 	}
 
 	defer rows.Close()
@@ -30,11 +30,17 @@ func GetStudentsDBHandler(query string, args []interface{}) ([]models.Student, e
 		var student models.Student
 		err = rows.Scan(&student.ID, &student.FirstName, &student.LastName, &student.Email, &student.Class)
 		if err != nil {
-			return []models.Student{}, utils.ErrorHandler(err, "Error fetching Students.")
+			return []models.Student{}, 0, utils.ErrorHandler(err, "Error fetching Students.")
 		}
 		studentList = append(studentList, student)
 	}
-	return studentList, nil
+	var totalStudents int
+	err = db.QueryRow("SELECT COUNT(*) FROM students").Scan(&totalStudents)
+	if err != nil {
+		utils.ErrorHandler(err, "")
+		return studentList, 0, nil
+	}
+	return studentList, totalStudents, nil
 }
 
 func GetOneStudentDBHandler(studentId int) (models.Student, error) {

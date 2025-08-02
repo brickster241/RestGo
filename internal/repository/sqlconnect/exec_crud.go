@@ -16,16 +16,16 @@ import (
 	"github.com/brickster241/rest-go/pkg/utils"
 )
 
-func GetExecsDBHandler(query string, args []interface{}) ([]models.Exec, error) {
+func GetExecsDBHandler(query string, args []interface{}) ([]models.Exec, int, error) {
 	db, err := ConnectDB()
 	if err != nil {
-		return []models.Exec{}, utils.ErrorHandler(err, "Error connecting DB.")
+		return []models.Exec{}, 0, utils.ErrorHandler(err, "Error connecting DB.")
 	}
 	defer db.Close()
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		return []models.Exec{}, utils.ErrorHandler(err, "Error fetching Execs.")
+		return []models.Exec{}, 0, utils.ErrorHandler(err, "Error fetching Execs.")
 	}
 
 	defer rows.Close()
@@ -36,11 +36,18 @@ func GetExecsDBHandler(query string, args []interface{}) ([]models.Exec, error) 
 		var exec models.Exec
 		err = rows.Scan(&exec.ID, &exec.FirstName, &exec.LastName, &exec.Email, &exec.Username, &exec.UserCreatedAt, &exec.InactiveStatus, &exec.Role)
 		if err != nil {
-			return []models.Exec{}, utils.ErrorHandler(err, "Error fetching Execs.")
+			return []models.Exec{}, 0, utils.ErrorHandler(err, "Error fetching Execs.")
 		}
 		execList = append(execList, exec)
 	}
-	return execList, nil
+
+	var totalExecs int
+	err = db.QueryRow("SELECT COUNT(*) FROM execs").Scan(&totalExecs)
+	if err != nil {
+		utils.ErrorHandler(err, "")
+		return execList, 0, nil
+	}
+	return execList, totalExecs, nil
 }
 
 func GetOneExecDBHandler(execId int) (models.Exec, error) {

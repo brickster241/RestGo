@@ -28,8 +28,12 @@ func GetStudentsHandler(w http.ResponseWriter, r *http.Request) {
 	// Will be of type param:asc or param:desc
 	query = applySortingFiltersStudent(r, query)
 
+	page, limit := utils.GetPaginationParams(r)
+	offset := (page - 1) * limit
+	query += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset)
+	
 	// Connect to DB
-	studentList, err := sqlconnect.GetStudentsDBHandler(query, args)
+	studentList, totalStudents, err := sqlconnect.GetStudentsDBHandler(query, args)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -38,10 +42,14 @@ func GetStudentsHandler(w http.ResponseWriter, r *http.Request) {
 	resp := struct {
 		Status string    `json:"status"`
 		Count  int       `json:"count"`
+		Page int		`json:"page"`
+		PageSize int 	`json:"page_size"`
 		Data   []models.Student `json:"data"`
 	}{
 		Status: "success",
-		Count:  len(studentList),
+		Count:  totalStudents,
+		Page: page,
+		PageSize: limit,
 		Data:   studentList,
 	}
 

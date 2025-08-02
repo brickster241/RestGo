@@ -33,8 +33,12 @@ func GetExecsHandler(w http.ResponseWriter, r *http.Request) {
 	// Will be of type param:asc or param:desc
 	query = applySortingFiltersExec(r, query)
 
+	page, limit := utils.GetPaginationParams(r)
+	offset := (page - 1) * limit
+	query += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset)
+
 	// Connect to DB
-	execList, err := sqlconnect.GetExecsDBHandler(query, args)
+	execList, totalExecs, err := sqlconnect.GetExecsDBHandler(query, args)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -43,10 +47,14 @@ func GetExecsHandler(w http.ResponseWriter, r *http.Request) {
 	resp := struct {
 		Status string    `json:"status"`
 		Count  int       `json:"count"`
+		Page int `json:"page"`
+		PageSize int `json:"page_size"`
 		Data   []models.Exec `json:"data"`
 	}{
 		Status: "success",
-		Count:  len(execList),
+		Count:  totalExecs,
+		Page: page,
+		PageSize : limit, 
 		Data:   execList,
 	}
 

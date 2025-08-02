@@ -10,16 +10,16 @@ import (
 	"github.com/brickster241/rest-go/pkg/utils"
 )
 
-func GetTeachersDBHandler(query string, args []interface{}) ([]models.Teacher, error) {
+func GetTeachersDBHandler(query string, args []interface{}) ([]models.Teacher, int, error) {
 	db, err := ConnectDB()
 	if err != nil {
-		return []models.Teacher{}, utils.ErrorHandler(err, "Error connecting DB.")
+		return []models.Teacher{}, 0, utils.ErrorHandler(err, "Error connecting DB.")
 	}
 	defer db.Close()
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		return []models.Teacher{}, utils.ErrorHandler(err, "Error fetching Teachers.")
+		return []models.Teacher{}, 0, utils.ErrorHandler(err, "Error fetching Teachers.")
 	}
 
 	defer rows.Close()
@@ -30,11 +30,17 @@ func GetTeachersDBHandler(query string, args []interface{}) ([]models.Teacher, e
 		var teacher models.Teacher
 		err = rows.Scan(&teacher.ID, &teacher.FirstName, &teacher.LastName, &teacher.Email, &teacher.Class, &teacher.Subject)
 		if err != nil {
-			return []models.Teacher{}, utils.ErrorHandler(err, "Error fetching Teachers.")
+			return []models.Teacher{}, 0, utils.ErrorHandler(err, "Error fetching Teachers.")
 		}
 		teacherList = append(teacherList, teacher)
 	}
-	return teacherList, nil
+	var totalTeachers int
+	err = db.QueryRow("SELECT COUNT(*) FROM teachers").Scan(&totalTeachers)
+	if err != nil {
+		utils.ErrorHandler(err, "")
+		return teacherList, 0, nil
+	}
+	return teacherList, totalTeachers, nil
 }
 
 func GetStudentsByTeachersIDDBHandler(teacherId int, students []models.Student) ([]models.Student, error) {
