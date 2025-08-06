@@ -18,7 +18,12 @@ var mu_tchr = &sync.Mutex{}
 
 // GET teachers/
 func GetTeachersHandler(w http.ResponseWriter, r *http.Request) {
-	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	query := "SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE 1=1"
 	var args []interface{}
 	
@@ -59,7 +64,12 @@ func GetTeachersHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /teachers/{id}
 func GetOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
-	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	// Handle Path Parameters
 	teacherId, err := strconv.Atoi(idStr)
@@ -81,7 +91,12 @@ func GetOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /teachers/{id}/students
 func GetStudentsByTeacherIDHandler(w http.ResponseWriter, r *http.Request) {
-	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	var students []models.Student
 	idStr := r.PathValue("id")
 	
@@ -116,6 +131,13 @@ func GetStudentsByTeacherIDHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /teachers/{id}/studentcount
 func GetStudentCountByTeacherIDHandler(w http.ResponseWriter, r *http.Request) {
+	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
 	idStr := r.PathValue("id")
 	
 	// Handle Path Parameters
@@ -208,7 +230,12 @@ func addQueryFiltersTeacher(r *http.Request, query string, args []interface{}) (
 
 // POST /teachers/
 func PostTeachersHandler(w http.ResponseWriter, r *http.Request) {
-	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_tchr.Lock()
 	defer mu_tchr.Unlock()
@@ -284,6 +311,12 @@ func PostTeachersHandler(w http.ResponseWriter, r *http.Request) {
 // PUT /teachers/{id}
 func PutOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_tchr.Lock()
 	defer mu_tchr.Unlock()
@@ -319,6 +352,12 @@ func PutOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 // PATCH /teachers/{id}
 func PatchOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_tchr.Lock()
 	defer mu_tchr.Unlock()
@@ -355,13 +394,19 @@ func PatchOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 // PATCH /teachers/{id}
 func PatchTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_tchr.Lock()
 	defer mu_tchr.Unlock()
 
 	// Get specific patch keys
 	var updates []map[string]interface{}
-	err := json.NewDecoder(r.Body).Decode(&updates)
+	err = json.NewDecoder(r.Body).Decode(&updates)
 	if err != nil {
 		http.Error(w, utils.ErrorHandler(err, "Invalid Payload Request.").Error(), http.StatusBadRequest)
 		return
@@ -381,6 +426,13 @@ func PatchTeachersHandler(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /teachers/{id}
 func DeleteOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
+	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_tchr.Lock()
 	defer mu_tchr.Unlock()
@@ -415,13 +467,19 @@ func DeleteOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /teachers/
 func DeleteTeachersHandler(w http.ResponseWriter, r *http.Request) {
+	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	// Mutex variables
 	mu_tchr.Lock()
 	defer mu_tchr.Unlock()
 
 	// Get specific ids to delete
 	var ids []int
-	err := json.NewDecoder(r.Body).Decode(&ids)
+	err = json.NewDecoder(r.Body).Decode(&ids)
 	if err != nil {
 		http.Error(w, utils.ErrorHandler(err, "Invalid Payload Request.").Error(), http.StatusBadRequest)
 		return

@@ -18,7 +18,12 @@ var mu_sdnt = &sync.Mutex{}
 
 // GET students/
 func GetStudentsHandler(w http.ResponseWriter, r *http.Request) {
-	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "manager", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	query := "SELECT id, first_name, last_name, email, class FROM students WHERE 1=1"
 	var args []interface{}
 	
@@ -59,7 +64,12 @@ func GetStudentsHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /students/{id}
 func GetOneStudentHandler(w http.ResponseWriter, r *http.Request) {
-	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "manager", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	idStr := r.PathValue("id")
 	// Handle Path Parameters
 	studentId, err := strconv.Atoi(idStr)
@@ -136,7 +146,12 @@ func addQueryFiltersStudent(r *http.Request, query string, args []interface{}) (
 
 // POST /students/
 func PostStudentsHandler(w http.ResponseWriter, r *http.Request) {
-	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_sdnt.Lock()
 	defer mu_sdnt.Unlock()
@@ -211,7 +226,12 @@ func PostStudentsHandler(w http.ResponseWriter, r *http.Request) {
 
 // PUT /students/{id}
 func PutOneStudentHandler(w http.ResponseWriter, r *http.Request) {
-	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_sdnt.Lock()
 	defer mu_sdnt.Unlock()
@@ -246,7 +266,12 @@ func PutOneStudentHandler(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /students/{id}
 func PatchOneStudentHandler(w http.ResponseWriter, r *http.Request) {
-	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_sdnt.Lock()
 	defer mu_sdnt.Unlock()
@@ -283,13 +308,19 @@ func PatchOneStudentHandler(w http.ResponseWriter, r *http.Request) {
 // PATCH /students/{id}
 func PatchStudentsHandler(w http.ResponseWriter, r *http.Request) {
 	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_sdnt.Lock()
 	defer mu_sdnt.Unlock()
 
 	// Get specific patch keys
 	var updates []map[string]interface{}
-	err := json.NewDecoder(r.Body).Decode(&updates)
+	err = json.NewDecoder(r.Body).Decode(&updates)
 	if err != nil {
 		http.Error(w, utils.ErrorHandler(err, "Invalid Payload Request.").Error(), http.StatusBadRequest)
 		return
@@ -309,6 +340,13 @@ func PatchStudentsHandler(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /students/{id}
 func DeleteOneStudentHandler(w http.ResponseWriter, r *http.Request) {
+	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_sdnt.Lock()
 	defer mu_sdnt.Unlock()
@@ -343,13 +381,20 @@ func DeleteOneStudentHandler(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /students/
 func DeleteStudentsHandler(w http.ResponseWriter, r *http.Request) {
+	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_sdnt.Lock()
 	defer mu_sdnt.Unlock()
 
 	// Get specific ids to delete
 	var ids []int
-	err := json.NewDecoder(r.Body).Decode(&ids)
+	err = json.NewDecoder(r.Body).Decode(&ids)
 	if err != nil {
 		http.Error(w, utils.ErrorHandler(err, "Invalid Payload Request.").Error(), http.StatusBadRequest)
 		return

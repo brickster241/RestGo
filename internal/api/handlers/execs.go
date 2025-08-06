@@ -23,6 +23,12 @@ var mu_exec = &sync.Mutex{}
 
 // GET execs/
 func GetExecsHandler(w http.ResponseWriter, r *http.Request) {
+
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	
 	query := "SELECT id, first_name, last_name, email, username, user_created_at, inactive_status, role FROM execs WHERE 1=1"
 	var args []interface{}
@@ -64,6 +70,12 @@ func GetExecsHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /execs/{id}
 func GetOneExecHandler(w http.ResponseWriter, r *http.Request) {
+
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	
 	idStr := r.PathValue("id")
 	// Handle Path Parameters
@@ -142,7 +154,13 @@ func addQueryFiltersExec(r *http.Request, query string, args []interface{}) (str
 
 // POST /execs/
 func PostExecsHandler(w http.ResponseWriter, r *http.Request) {
-	
+
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_exec.Lock()
 	defer mu_exec.Unlock()
@@ -217,7 +235,12 @@ func PostExecsHandler(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /execs/{id}
 func PatchOneExecHandler(w http.ResponseWriter, r *http.Request) {
-	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_exec.Lock()
 	defer mu_exec.Unlock()
@@ -253,14 +276,19 @@ func PatchOneExecHandler(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /execs/{id}
 func PatchExecsHandler(w http.ResponseWriter, r *http.Request) {
-	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin", "exec")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_exec.Lock()
 	defer mu_exec.Unlock()
 
 	// Get specific patch keys
 	var updates []map[string]interface{}
-	err := json.NewDecoder(r.Body).Decode(&updates)
+	err = json.NewDecoder(r.Body).Decode(&updates)
 	if err != nil {
 		http.Error(w, utils.ErrorHandler(err, "Invalid Payload Request.").Error(), http.StatusBadRequest)
 		return
@@ -280,6 +308,13 @@ func PatchExecsHandler(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /execs/{id}
 func DeleteOneExecHandler(w http.ResponseWriter, r *http.Request) {
+	
+	_, err := utils.AuthorizeUser(r.Context().Value(utils.ContextKey("role")).(string), "admin")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Mutex variables
 	mu_exec.Lock()
 	defer mu_exec.Unlock()
