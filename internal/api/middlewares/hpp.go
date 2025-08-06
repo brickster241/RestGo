@@ -15,8 +15,10 @@ type HPPOptions struct {
 }
 
 func Hpp(options HPPOptions) func (http.Handler) http.Handler {
+	log.Println("******* Initializing HPPMW *******")
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Println("+++++++ HPPMW Ran +++++++")
 			if options.CheckBody && r.Method == http.MethodPost && isCorrectContentType(r, options.CheckBodyOnlyForContentType) {
 
 				// Filter body params
@@ -30,6 +32,7 @@ func Hpp(options HPPOptions) func (http.Handler) http.Handler {
 			}
 			
 			next.ServeHTTP(w, r)
+			log.Println("------- Sending Response from HPPMW -------")
 		})
 	}
 }

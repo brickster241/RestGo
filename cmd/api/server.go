@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"log"
 	"net/http"
+	"time"
 
 	mw "github.com/brickster241/rest-go/internal/api/middlewares"
 	"github.com/brickster241/rest-go/internal/api/router"
@@ -29,23 +30,21 @@ func main() {
 	key := "server.key"
 
 	
-	/* rl := mw.NewRateLimiter(5, time.Minute)
+	rl := mw.NewRateLimiter(5, time.Minute)
 	hppOptions := mw.HPPOptions{
 		CheckQuery: true,
 		CheckBody: true,
 		CheckBodyOnlyForContentType: "application/x-www-form-urlencoded",
 		WhiteList: []string{"sortBy", "sortOrder", "name", "age", "class"},
-	}*/
+	}
 
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 	}
 
 	// Proper Middleware order.
-	// secureMux := applyMiddleWares(mux, mw.Hpp(hppOptions), mw.CompressionMW, mw.SecurityHeadersMW, mw.ResponseTimeMW, rl.RateLimiterMW, mw.CorsMW)
-
 	jwt_MW := mw.ExcludePathsMW(mw.JWT_MW, "/execs/login", "/execs/forgotpassword", "/execs/resetpassword/reset")
-	secureMux := utils.ApplyMiddleWares(router.MainRouter(), jwt_MW, mw.SecurityHeadersMW)
+	secureMux := utils.ApplyMiddleWares(router.MainRouter(), mw.Hpp(hppOptions), mw.SecurityHeadersMW, mw.CompressionMW, jwt_MW, mw.XSS_MW, mw.ResponseTimeMW, rl.RateLimiterMW, mw.CorsMW)
 	// Define Port and Start server
 	port := ":3000"
 
