@@ -8,7 +8,11 @@ import (
 )
 
 func CompressionMW(next http.Handler) http.Handler {
+	log.Println("******* Initializing CompressionMW *******")
+	
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println("+++++++ CompressionMW Ran +++++++")
+	
 		// Check if client accepts gzip encoding
 		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 			next.ServeHTTP(w, r)
@@ -23,7 +27,7 @@ func CompressionMW(next http.Handler) http.Handler {
 		w = &gzipResponseWriter{ResponseWriter: w, Writer: gz}
 
 		next.ServeHTTP(w, r)
-		log.Println("Sent Response from CompressionMW.")
+		log.Println("------- Sending Response from CompressionMW -------")
 	})
 }
 

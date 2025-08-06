@@ -3,6 +3,7 @@ package middlewares
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 
@@ -10,10 +11,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type ContextKey string
-
 func JWT_MW(next http.Handler) http.Handler {
+	log.Println("******* Initializing JWT_MW *******")
+	
 	return http.HandlerFunc(func (w http.ResponseWriter, r* http.Request)  {
+		log.Println("+++++++ JWT_MW Ran +++++++")
 		// Fetch the cookies and check
 		token, err := r.Cookie("Bearer")
 		if err != nil {
@@ -47,11 +49,12 @@ func JWT_MW(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), ContextKey("role"), claims["role"])
-		ctx = context.WithValue(ctx, ContextKey("expiresAt"), claims["exp"])
-		ctx = context.WithValue(ctx, ContextKey("username"), claims["user"])
-		ctx = context.WithValue(ctx, ContextKey("userId"), claims["uid"])
+		ctx := context.WithValue(r.Context(), utils.ContextKey("role"), claims["role"])
+		ctx = context.WithValue(ctx, utils.ContextKey("expiresAt"), claims["exp"])
+		ctx = context.WithValue(ctx, utils.ContextKey("username"), claims["user"])
+		ctx = context.WithValue(ctx, utils.ContextKey("userId"), claims["uid"])
 
 		next.ServeHTTP(w, r.WithContext(ctx))
+		log.Println("------- Sending Response from JWT_MW -------")
 	})
 }

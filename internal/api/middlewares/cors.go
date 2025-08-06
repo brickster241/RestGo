@@ -1,13 +1,19 @@
 package middlewares
 
-import "net/http"
+import (
+	"log"
+	"net/http"
+)
 
 var allowedOrigins = []string {
 	"https://localhost:3000",
 }
 
 func CorsMW(next http.Handler) http.Handler {
+	log.Println("******* Initializing CorsMW *******")
+	
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println("+++++++ CorsMW Ran +++++++")
 		origin := r.Header.Get("Origin")
 
 		// Only allow requests from specified urls' header.
@@ -28,6 +34,7 @@ func CorsMW(next http.Handler) http.Handler {
 		}
 
 		next.ServeHTTP(w, r)
+		log.Println("------- Sending Response from CorsMW -------")
 	})
 }
 

@@ -7,8 +7,11 @@ import (
 )
 
 func ResponseTimeMW(next http.Handler) http.Handler {
+	log.Println("******* Initializing ResponseTimeMW *******")
+	
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
+		log.Println("+++++++ ResponseTimeMW Ran +++++++")
+	
 		start := time.Now()
 		rw := &responseTimeWriter{ResponseWriter: w, status: http.StatusOK}
 		
@@ -21,7 +24,7 @@ func ResponseTimeMW(next http.Handler) http.Handler {
 		duration = time.Since(start)
 		// Log the request details
 		log.Printf("Method: %s, URL: %s, Status: %d, Duration: %v\n", r.Method, r.URL, rw.status, duration.String())
-		log.Println("Sent Response from ResponseTimeMW.")
+		log.Println("------- Sending Response from ResponseTimeMW -------")
 	})
 }
 

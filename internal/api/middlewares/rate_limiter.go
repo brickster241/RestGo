@@ -35,7 +35,10 @@ func (rl *rateLimiter) resetVisitorCount() {
 }
 
 func (rl *rateLimiter) RateLimiterMW(next http.Handler) http.Handler {
+	log.Println("******* Initializing RateLimiterMW *******")
+	
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println("+++++++ RateLimiterMW Ran +++++++")
 		rl.mu.Lock()
 		defer rl.mu.Unlock()
 		visIP := r.RemoteAddr
@@ -48,5 +51,6 @@ func (rl *rateLimiter) RateLimiterMW(next http.Handler) http.Handler {
 		}
 
 		next.ServeHTTP(w, r)
+		log.Println("------- Sending Response from RateLimiterMW -------")
 	})
 }

@@ -1,11 +1,14 @@
 package middlewares
 
 import (
+	"log"
 	"net/http"
 	"strings"
 )
 
 func ExcludePathsMW(middleware func(http.Handler) http.Handler, excludedPaths ... string) func (http.Handler) http.Handler {
+	log.Println("******* Initializing ExcludePathsMW *******")
+	
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			for _, path := range excludedPaths {
@@ -16,5 +19,6 @@ func ExcludePathsMW(middleware func(http.Handler) http.Handler, excludedPaths ..
 			}
 			middleware(next).ServeHTTP(w, r)
 		})
+
 	}
 }

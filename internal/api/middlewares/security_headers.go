@@ -1,10 +1,17 @@
 package middlewares
 
-import "net/http"
+import (
+	"log"
+	"net/http"
+)
 
 // Middleware Skeleton
 func SecurityHeadersMW(next http.Handler) http.Handler {
+	log.Println("******* Initializing SecurityHeadersMW *******")
+	
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println("+++++++ SecurityHeadersMW Ran +++++++")
+	
 		w.Header().Set("X-DNS-Prefetch-Control", "off")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-XSS-Protection", "1;mode=block")
@@ -20,5 +27,7 @@ func SecurityHeadersMW(next http.Handler) http.Handler {
 		w.Header().Set("Cross-Origin-Embedder-Policy", "require-corp")
 		w.Header().Set("Permissions-Policy", "geolocation=(self), microphone=()")
 		next.ServeHTTP(w, r)
+
+		log.Println("------- Sending Response from SecurityHeadersMW -------")
 	})
 }
